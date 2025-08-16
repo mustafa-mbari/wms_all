@@ -1,0 +1,26 @@
+{
+  "name": "warehousepro-shared",
+  "version": "1.0.0",
+  "description": "Shared types, constants and utilities for WarehousePro",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "@types/node": "^20.16.11"
+  },
+  "exports": {
+    "./types": "./dist/types/index.js",
+    "./constants": "./dist/constants/index.js",
+    "./utils": "./dist/utils/index.js",
+    "./validation": "./dist/validation/index.js"
+  }
+}
