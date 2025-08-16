@@ -437,3 +437,9 @@ export type Warehouse = typeof warehouses.$inferSelect;
 export type InsertWarehouse = z.infer<typeof insertWarehouseSchema>;
 export type ClassType = typeof classTypes.$inferSelect;
 export type TuOrientationType = typeof tuOrientationTypes.$inferSelect;
+
+// Login schema
+export const loginSchema = z.object({
+  username: z.string().min(1, "Username is required"),
+  password: z.string().min(1, "Password is required"),
+});
