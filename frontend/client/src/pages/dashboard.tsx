@@ -27,14 +27,47 @@ import {
 import { useState } from "react";
 import { Link } from "wouter";
 
+// Define types for dashboard data
+interface DashboardStats {
+  inventoryValue: number;
+  activeProducts: number;
+  pendingOrders: number;
+  lowStockItemsCount: number;
+  inventoryLevelsByCategory: Array<{
+    category: string;
+    value: number;
+  }>;
+  orderTrends: Array<{
+    date: string;
+    incoming: number;
+    outgoing: number;
+  }>;
+  recentOrders: Array<{
+    id: number;
+    orderNumber: string;
+    customerId: string;
+    orderDate: string;
+    status: string;
+    totalAmount: number;
+  }>;
+}
+
+interface Activity {
+  id: number;
+  type: string;
+  description: string;
+  timestamp: string;
+  user: string;
+}
+
 export default function Dashboard() {
   const [activeIndex, setActiveIndex] = useState(0);
   
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard/stats"],
   });
   
-  const { data: activities, isLoading: activitiesLoading } = useQuery({
+  const { data: activities, isLoading: activitiesLoading } = useQuery<Activity[]>({
     queryKey: ["/api/dashboard/activities"],
   });
   
@@ -69,6 +102,8 @@ export default function Dashboard() {
   
   const renderCategoryColors = () => {
     const colors = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6"];
+    
+    if (!data?.inventoryLevelsByCategory) return null;
     
     return data.inventoryLevelsByCategory.map((category: any, index: number) => (
       <div key={index} className="flex items-center mt-2">
@@ -164,7 +199,7 @@ export default function Dashboard() {
         <StatCard 
           icon={<Coins className="text-primary-600 dark:text-primary-400 h-5 w-5" />}
           title="Total Inventory Value"
-          value={formatCurrency(data.inventoryValue || 0)}
+          value={formatCurrency(data?.inventoryValue || 0)}
           trend={{ direction: "up", value: "5.3% from last month" }}
           iconClassName="bg-primary-100 dark:bg-primary-900"
         />
@@ -172,7 +207,7 @@ export default function Dashboard() {
         <StatCard 
           icon={<Package className="text-indigo-600 dark:text-indigo-400 h-5 w-5" />}
           title="Active Products"
-          value={data.activeProducts || 0}
+          value={data?.activeProducts || 0}
           trend={{ direction: "down", value: "2.1% from last month" }}
           iconClassName="bg-indigo-100 dark:bg-indigo-900"
         />
@@ -180,7 +215,7 @@ export default function Dashboard() {
         <StatCard 
           icon={<Clock className="text-yellow-600 dark:text-yellow-400 h-5 w-5" />}
           title="Pending Orders"
-          value={data.pendingOrders || 0}
+          value={data?.pendingOrders || 0}
           trend={{ direction: "up", value: "10.8% from last month" }}
           iconClassName="bg-yellow-100 dark:bg-yellow-900"
         />
@@ -188,7 +223,7 @@ export default function Dashboard() {
         <StatCard 
           icon={<AlertTriangle className="text-red-600 dark:text-red-400 h-5 w-5" />}
           title="Low Stock Items"
-          value={data.lowStockItemsCount || 0}
+          value={data?.lowStockItemsCount || 0}
           trend={{ direction: "up", value: "3 more than last week" }}
           iconClassName="bg-red-100 dark:bg-red-900"
         />
@@ -209,7 +244,7 @@ export default function Dashboard() {
                     <Pie
                       activeIndex={activeIndex}
                       activeShape={renderActiveShape}
-                      data={data.inventoryLevelsByCategory}
+                      data={data?.inventoryLevelsByCategory || []}
                       cx="50%"
                       cy="50%"
                       innerRadius={70}
@@ -218,7 +253,7 @@ export default function Dashboard() {
                       dataKey="value"
                       onMouseEnter={onPieEnter}
                     >
-                      {data.inventoryLevelsByCategory.map((_: any, index: number) => (
+                      {data?.inventoryLevelsByCategory?.map((_: any, index: number) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
@@ -243,7 +278,7 @@ export default function Dashboard() {
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart
-                  data={data.orderTrends}
+                  data={data?.orderTrends || []}
                   margin={{ top: 5, right: 30, left: 20, bottom: 25 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" />
@@ -317,7 +352,7 @@ export default function Dashboard() {
                   </div>
                   <div className="ml-3">
                     <p className="text-sm font-medium text-gray-900 dark:text-white">
-                      Critical: {data.lowStockItemsCount} products out of stock
+                      Critical: {data?.lowStockItemsCount || 0} products out of stock
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
                       2 hours ago
@@ -396,7 +431,7 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              {data.recentOrders && data.recentOrders.length > 0 ? (
+              {data?.recentOrders && data.recentOrders.length > 0 ? (
                 data.recentOrders.map((order: any) => (
                   <tr key={order.id}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">

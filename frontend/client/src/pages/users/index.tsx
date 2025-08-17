@@ -100,7 +100,7 @@ export default function UsersPage() {
       confirmPassword: z.string().optional(),
       isAdmin: z.boolean().default(false),
     })
-    .refine((data) => {
+    .refine((data: any) => {
       if (data.password && data.confirmPassword) {
         return data.password === data.confirmPassword;
       }
@@ -218,7 +218,7 @@ export default function UsersPage() {
     },
   });
 
-  const onCreateSubmit = (data: z.infer<typeof userFormSchema> & { password: string }) => {
+  const onCreateSubmit = (data: any) => {
     if (!data.password) {
       toast({
         title: "Password Required",
@@ -249,15 +249,15 @@ export default function UsersPage() {
       lastName: user.lastName || "",
       phone: user.phone || "",
       gender: user.gender || "",
-      birthDate: user.birthDate ? new Date(user.birthDate) : undefined,
+      birthDate: user.birthDate ? new Date(user.birthDate).toISOString().split('T')[0] : undefined,
       address: user.address || "",
       city: user.city || "",
       country: user.country || "",
       postalCode: user.postalCode || "",
       defaultWarehouseId: user.defaultWarehouseId || "",
       languagePreference: user.languagePreference || "",
-      isActive: user.isActive,
-      isAdmin: user.isAdmin,
+      isActive: user.isActive ?? false,
+      isAdmin: user.isAdmin ?? false,
     });
     setIsEditDialogOpen(true);
   };
@@ -503,7 +503,7 @@ export default function UsersPage() {
                           <FormLabel>Default Warehouse</FormLabel>
                           <Select
                             onValueChange={field.onChange}
-                            value={field.value}
+                            value={field.value || ""}
                           >
                             <FormControl>
                               <SelectTrigger>
@@ -538,7 +538,7 @@ export default function UsersPage() {
                           </div>
                           <FormControl>
                             <Switch
-                              checked={field.value}
+                              checked={field.value ?? false}
                               onCheckedChange={field.onChange}
                             />
                           </FormControl>
@@ -992,7 +992,7 @@ export default function UsersPage() {
                       </div>
                       <FormControl>
                         <Switch
-                          checked={field.value}
+                          checked={field.value ?? false}
                           onCheckedChange={field.onChange}
                         />
                       </FormControl>
