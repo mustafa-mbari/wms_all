@@ -12,6 +12,9 @@ import {
   Eye,
   EyeOff,
   X,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -72,6 +75,7 @@ export interface AdvancedTableProps<T = any> {
   onRowClick?: (row: T) => void
   searchable?: boolean
   groupable?: boolean
+  sortable?: boolean
   pagination?: boolean
   pageSize?: number
 }
@@ -201,6 +205,7 @@ export const AdvancedTable = <T extends Record<string, any>>({
   onRowClick,
   searchable = true,
   groupable = true,
+  sortable = true,
   pagination = false,
   pageSize = 10,
 }: AdvancedTableProps<T>) => {
@@ -212,6 +217,8 @@ export const AdvancedTable = <T extends Record<string, any>>({
     new Set(columns.map((col) => col.id))
   )
   const [currentPage, setCurrentPage] = useState(1)
+  const [sortBy, setSortBy] = useState<string | null>(null)
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
 
   // Helper functions
   const getNestedValue = (obj: any, path: string): any => {
@@ -236,6 +243,17 @@ export const AdvancedTable = <T extends Record<string, any>>({
   const handleGroupBy = (columnId: string) => {
     setGroupBy(groupBy === columnId ? null : columnId)
     setExpandedGroups(new Set())
+  }
+
+  const handleSort = (columnId: string) => {
+    if (sortBy === columnId) {
+      // Toggle sort order if same column
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc")
+    } else {
+      // Set new sort column
+      setSortBy(columnId)
+      setSortOrder("asc")
+    }
   }
 
   const toggleGroup = (groupKey: string) => {
@@ -265,7 +283,7 @@ export const AdvancedTable = <T extends Record<string, any>>({
   // Filter visible columns
   const filteredColumns = columns.filter((col) => visibleColumns.has(col.id))
 
-  // Process data with filters and grouping
+  // Process data with filters, sorting, and grouping
   const processedData = useMemo((): (GroupedData<T> | UngroupedData<T>)[] => {
     let filtered = data
 
@@ -283,6 +301,30 @@ export const AdvancedTable = <T extends Record<string, any>>({
         }
       }
     })
+
+    // Apply sorting
+    if (sortBy) {
+      const sortColumn = columns.find((col) => col.id === sortBy)
+      if (sortColumn?.accessorKey) {
+        filtered = [...filtered].sort((a, b) => {
+          const aValue = getNestedValue(a, sortColumn.accessorKey!)
+          const bValue = getNestedValue(b, sortColumn.accessorKey!)
+          
+          // Handle null/undefined values
+          if (aValue == null && bValue == null) return 0
+          if (aValue == null) return sortOrder === "asc" ? 1 : -1
+          if (bValue == null) return sortOrder === "asc" ? -1 : 1
+          
+          // Convert to strings for comparison
+          const aStr = String(aValue).toLowerCase()
+          const bStr = String(bValue).toLowerCase()
+          
+          if (aStr < bStr) return sortOrder === "asc" ? -1 : 1
+          if (aStr > bStr) return sortOrder === "asc" ? 1 : -1
+          return 0
+        })
+      }
+    }
 
     // Group data if groupBy is set
     if (groupBy) {
@@ -309,7 +351,7 @@ export const AdvancedTable = <T extends Record<string, any>>({
     }
 
     return [{ data: filtered, isGroup: false } as UngroupedData<T>]
-  }, [data, columnFilters, groupBy, columns])
+  }, [data, columnFilters, groupBy, columns, sortBy, sortOrder])
 
   // Pagination logic
   const paginatedData = useMemo(() => {
@@ -411,6 +453,25 @@ export const AdvancedTable = <T extends Record<string, any>>({
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold">{column.header}</span>
+                      {column.sortable !== false && column.accessorKey && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => handleSort(column.id)}
+                          title={`Sort by ${column.header}`}
+                        >
+                          {sortBy === column.id ? (
+                            sortOrder === "asc" ? (
+                              <ArrowUp className="h-3 w-3 text-primary" />
+                            ) : (
+                              <ArrowDown className="h-3 w-3 text-primary" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="h-3 w-3 text-muted-foreground" />
+                          )}
+                        </Button>
+                      )}
                       {groupable && (
                         <Button
                           variant="ghost"

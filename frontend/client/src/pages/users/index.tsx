@@ -920,6 +920,7 @@ export default function UsersPage() {
             onRowClick={handleRowClick}
             searchable={true}
             groupable={true}
+            sortable={true}
             pagination={true}
             pageSize={10}
             className="shadow-sm"
