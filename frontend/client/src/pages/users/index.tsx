@@ -6,14 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { AdvancedTable, type ColumnDef } from "@/components/ui/advanced-table";
 import {
   Card,
   CardContent,
@@ -351,33 +344,6 @@ export default function UsersPage() {
     updateMutation.mutate({ id: currentUser.id, data: updateData });
   };
 
-  const handleEdit = (user: User) => {
-    setCurrentUser(user);
-    editForm.reset({
-      username: user.username,
-      email: user.email,
-      firstName: user.firstName || "",
-      lastName: user.lastName || "",
-      phone: user.phone || "",
-      gender: user.gender || "",
-      birthDate: user.birthDate ? new Date(user.birthDate).toISOString().split('T')[0] : undefined,
-      address: user.address || "",
-      city: user.city || "",
-      country: user.country || "",
-      postalCode: user.postalCode || "",
-      defaultWarehouseId: user.defaultWarehouseId || "",
-      languagePreference: user.languagePreference || "",
-      isActive: user.isActive ?? false,
-      isAdmin: user.isAdmin ?? false,
-    });
-    setIsEditDialogOpen(true);
-  };
-
-  const handleDelete = (user: User) => {
-    setCurrentUser(user);
-    setIsDeleteDialogOpen(true);
-  };
-
   const confirmDelete = () => {
     if (currentUser) {
       deleteMutation.mutate(currentUser.id);
@@ -447,6 +413,212 @@ export default function UsersPage() {
     }
     return user.username.substring(0, 2).toUpperCase();
   };
+
+  // Handle user actions
+  const handleEdit = (user: UserWithRoles) => {
+    setCurrentUser(user);
+    editForm.reset({
+      username: user.username,
+      email: user.email,
+      firstName: user.firstName || "",
+      lastName: user.lastName || "",
+      phone: user.phone || "",
+      address: user.address || "",
+      isActive: user.isActive,
+      isAdmin: user.isAdmin || false,
+      defaultWarehouseId: user.defaultWarehouseId || "",
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleDelete = (user: UserWithRoles) => {
+    setCurrentUser(user);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleRowClick = (user: UserWithRoles) => {
+    console.log("User clicked:", user.username);
+  };
+
+  // Define columns for AdvancedTable
+  const columns: ColumnDef<UserWithRoles>[] = [
+    {
+      id: "username",
+      header: "Username",
+      accessorKey: "username",
+      cell: (value, row) => (
+        <div className="flex items-center">
+          <Avatar className="h-8 w-8 mr-2">
+            <AvatarFallback className="bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-100">
+              {getUserInitials(row)}
+            </AvatarFallback>
+          </Avatar>
+          <span className="font-medium">{value}</span>
+        </div>
+      ),
+    },
+    {
+      id: "name",
+      header: "Name",
+      accessorKey: "firstName",
+      cell: (_, row) => {
+        return row.firstName && row.lastName
+          ? `${row.firstName} ${row.lastName}`
+          : "—";
+      },
+    },
+    {
+      id: "email",
+      header: "Email",
+      accessorKey: "email",
+      cell: (value, row) => (
+        <div>
+          <div className="flex items-center">
+            <MailIcon className="h-4 w-4 mr-1 text-muted-foreground" />
+            <span className="text-muted-foreground">{value}</span>
+          </div>
+          {row.phone && (
+            <div className="text-xs text-muted-foreground flex items-center mt-1">
+              <PhoneIcon className="h-3 w-3 mr-1" />
+              {row.phone}
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: "role",
+      header: "Role",
+      accessorKey: "role_names",
+      cell: (_, row) => (
+        <div>
+          {row.role_names && row.role_names.length > 0 ? (
+            <div className="flex flex-wrap gap-1">
+              {row.role_names.map((roleName: string, index: number) => (
+                <Badge 
+                  key={index}
+                  variant={roleName.toLowerCase().includes('admin') ? "default" : "outline"}
+                >
+                  {roleName}
+                </Badge>
+              ))}
+            </div>
+          ) : row.isAdmin ? (
+            <Badge variant="default">Administrator</Badge>
+          ) : (
+            <Badge variant="outline">User</Badge>
+          )}
+          {row.defaultWarehouseId && (
+            <div className="text-xs text-muted-foreground flex items-center mt-1">
+              <Building className="h-3 w-3 mr-1" />
+              {getWarehouseName(row.defaultWarehouseId)}
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      accessorKey: "isActive",
+      cell: (value, row) => (
+        <div>
+          {value ? (
+            <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
+              <CheckCircle className="mr-1 h-3 w-3" /> Active
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="border-red-200 text-red-800 dark:border-red-800 dark:text-red-300">
+              <XCircle className="mr-1 h-3 w-3" /> Inactive
+            </Badge>
+          )}
+          {row.lastLogin && (
+            <div className="text-xs text-muted-foreground mt-1">
+              Last login: {new Date(row.lastLogin).toLocaleDateString()}
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: (_, row) => (
+        <div className="flex items-center gap-1">
+          {canPerformAdminActions && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleEdit(row);
+                }}
+              >
+                <Edit className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-destructive hover:text-destructive"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDelete(row);
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </>
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <MoreHorizontal className="h-4 w-4" />
+                <span className="sr-only">Open menu</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              
+              {canPerformAdminActions && (
+                <>
+                  <DropdownMenuItem onClick={() => handleEdit(row)}>
+                    <Edit className="mr-2 h-4 w-4" /> Edit
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={() => {
+                      setCurrentUser(row);
+                      setIsRoleDialogOpen(true);
+                    }}
+                  >
+                    <ShieldIcon className="mr-2 h-4 w-4" /> Manage Roles
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={() => {
+                      setCurrentUser(row);
+                      setIsPasswordDialogOpen(true);
+                    }}
+                  >
+                    <KeyIcon className="mr-2 h-4 w-4" /> Reset Password
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    onClick={() => handleDelete(row)}
+                    className="text-red-600"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" /> Delete
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ),
+      filterable: false,
+    },
+  ];
 
   if (isLoading) {
     return (
@@ -722,7 +894,7 @@ export default function UsersPage() {
         <CardHeader>
           <CardTitle>User Directory</CardTitle>
           <CardDescription>
-            View and manage all system users
+            Enhanced user management with column search, filtering, grouping, and column visibility controls
           </CardDescription>
           {/* Show read-only notice for non-Super Admins */}
           {!canPerformAdminActions && (
@@ -735,236 +907,23 @@ export default function UsersPage() {
           )}
         </CardHeader>
         <CardContent>
-          <div className="mb-4 flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-            <div className="relative w-full sm:w-1/3">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500 dark:text-gray-400" />
-              <Input
-                placeholder="Search users..."
-                className="pl-8"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-            <Select
-              value={roleFilter}
-              onValueChange={setRoleFilter}
-            >
-              <SelectTrigger className="w-full sm:w-1/4">
-                <SelectValue placeholder="All Roles" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_all">All Roles</SelectItem>
-                <SelectItem value="admin">Administrators</SelectItem>
-                <SelectItem value="user">Regular Users</SelectItem>
-              </SelectContent>
-            </Select>
-            {(searchTerm || roleFilter !== "_all") && (
-              <Button variant="outline" onClick={() => {
-                setSearchTerm("");
-                setRoleFilter("_all");
-              }}>
-                <FilterX className="mr-2 h-4 w-4" /> Clear Filters
-              </Button>
-            )}
+          <div className="mb-4 flex justify-end">
             <Button variant="outline" onClick={() => refetchUsers()}>
               <RefreshCw className="mr-2 h-4 w-4" /> Refresh
             </Button>
           </div>
 
-          <div className="border rounded-md">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="cursor-pointer" onClick={() => toggleSort("username")}>
-                    <div className="flex items-center">
-                      Username
-                      {sortBy === "username" && (
-                        <ArrowUpDown className="ml-2 h-4 w-4" />
-                      )}
-                    </div>
-                  </TableHead>
-                  <TableHead className="cursor-pointer" onClick={() => toggleSort("name")}>
-                    <div className="flex items-center">
-                      Name
-                      {sortBy === "name" && (
-                        <ArrowUpDown className="ml-2 h-4 w-4" />
-                      )}
-                    </div>
-                  </TableHead>
-                  <TableHead className="cursor-pointer" onClick={() => toggleSort("email")}>
-                    <div className="flex items-center">
-                      Email
-                      {sortBy === "email" && (
-                        <ArrowUpDown className="ml-2 h-4 w-4" />
-                      )}
-                    </div>
-                  </TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredUsers.length > 0 ? (
-                  filteredUsers.map((user: UserWithRoles) => (
-                    <TableRow key={user.id}>
-                      <TableCell>
-                        <div className="flex items-center">
-                          <Avatar className="h-8 w-8 mr-2">
-                            <AvatarFallback className="bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-100">
-                              {getUserInitials(user)}
-                            </AvatarFallback>
-                          </Avatar>
-                          {user.username}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {user.firstName && user.lastName
-                          ? `${user.firstName} ${user.lastName}`
-                          : "—"}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center">
-                          <MailIcon className="h-4 w-4 mr-1 text-muted-foreground" />
-                          {user.email}
-                        </div>
-                        {user.phone && (
-                          <div className="text-xs text-muted-foreground flex items-center mt-1">
-                            <PhoneIcon className="h-3 w-3 mr-1" />
-                            {user.phone}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {user.role_names && user.role_names.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {user.role_names.map((roleName: string, index: number) => (
-                              <Badge 
-                                key={index}
-                                variant={roleName.toLowerCase().includes('admin') ? "default" : "outline"}
-                              >
-                                {roleName}
-                              </Badge>
-                            ))}
-                          </div>
-                        ) : user.isAdmin ? (
-                          <Badge variant="default">
-                            Administrator
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline">
-                            User
-                          </Badge>
-                        )}
-                        {user.defaultWarehouseId && (
-                          <div className="text-xs text-muted-foreground flex items-center mt-1">
-                            <Building className="h-3 w-3 mr-1" />
-                            {getWarehouseName(user.defaultWarehouseId)}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {user.isActive ? (
-                          <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
-                            <CheckCircle className="mr-1 h-3 w-3" /> Active
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="border-red-200 text-red-800 dark:border-red-800 dark:text-red-300">
-                            <XCircle className="mr-1 h-3 w-3" /> Inactive
-                          </Badge>
-                        )}
-                        {user.lastLogin && (
-                          <div className="text-xs text-muted-foreground mt-1">
-                            Last login: {new Date(user.lastLogin).toLocaleDateString()}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreHorizontal className="h-4 w-4" />
-                              <span className="sr-only">Open menu</span>
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            
-                            {/* Edit and Delete - Super Admin only */}
-                            {canPerformAdminActions && (
-                              <>
-                                <DropdownMenuItem onClick={() => handleEdit(user)}>
-                                  <Edit className="mr-2 h-4 w-4" /> Edit
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleDelete(user)}>
-                                  <Trash2 className="mr-2 h-4 w-4 text-red-500" /> Delete
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                              </>
-                            )}
-                            
-                            {/* Role management - Super Admin only */}
-                            {canPerformAdminActions && (
-                              <DropdownMenuItem onClick={() => handleRoleChange(user)}>
-                                <ShieldIcon className="mr-2 h-4 w-4" /> Change Role
-                              </DropdownMenuItem>
-                            )}
-                            
-                            {/* Password change - Super Admin or own account */}
-                            {(canPerformAdminActions || currentAuthUser?.id === user.id) && (
-                              <DropdownMenuItem onClick={() => handlePasswordChange(user)}>
-                                <KeyIcon className="mr-2 h-4 w-4" /> Change Password
-                              </DropdownMenuItem>
-                            )}
-                            
-                            {/* Activate/Deactivate - Super Admin only */}
-                            {canPerformAdminActions && (
-                              <>
-                                <DropdownMenuSeparator />
-                                {user.isActive ? (
-                                  <DropdownMenuItem onClick={() => updateMutation.mutate({ id: user.id, data: { isActive: false } })}>
-                                    <LockIcon className="mr-2 h-4 w-4" /> Deactivate
-                                  </DropdownMenuItem>
-                                ) : (
-                                  <DropdownMenuItem onClick={() => updateMutation.mutate({ id: user.id, data: { isActive: true } })}>
-                                    <UnlockIcon className="mr-2 h-4 w-4" /> Activate
-                                  </DropdownMenuItem>
-                                )}
-                              </>
-                            )}
-                            
-                            {/* If not super admin and not own account, show limited options */}
-                            {!canPerformAdminActions && currentAuthUser?.id !== user.id && (
-                              <DropdownMenuItem disabled>
-                                <span className="text-muted-foreground">View Only - No Actions Available</span>
-                              </DropdownMenuItem>
-                            )}
-                            
-                            {/* If no actions available at all */}
-                            {!canPerformAdminActions && currentAuthUser?.id !== user.id && (
-                              <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem disabled>
-                                  <span className="text-xs text-muted-foreground">Contact Super Admin for user changes</span>
-                                </DropdownMenuItem>
-                              </>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
-                      No users found
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
+          {/* Enhanced Table with Search, Filter, and Column Controls */}
+          <AdvancedTable
+            data={filteredUsers}
+            columns={columns}
+            onRowClick={handleRowClick}
+            searchable={true}
+            groupable={true}
+            pagination={true}
+            pageSize={10}
+            className="shadow-sm"
+          />
 
           <div className="flex items-center justify-end space-x-2 py-4">
             <div className="text-sm text-muted-foreground">
