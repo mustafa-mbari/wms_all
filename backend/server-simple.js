@@ -299,10 +299,15 @@ app.get('/api/users', async (req, res) => {
         u.last_login_at as "lastLogin",
         u.created_at as "createdAt",
         u.updated_at as "updatedAt",
-        CASE WHEN r.slug = 'admin' THEN true ELSE false END as "isAdmin"
+        bool_or(r.slug = 'admin') as "isAdmin",
+        array_agg(DISTINCT r.name) FILTER (WHERE r.name IS NOT NULL) as "role_names",
+        array_agg(DISTINCT r.slug) FILTER (WHERE r.slug IS NOT NULL) as "role_slugs"
       FROM users u
       LEFT JOIN user_roles ur ON u.id = ur.user_id
       LEFT JOIN roles r ON ur.role_id = r.id
+      GROUP BY u.id, u.username, u.email, u.first_name, u.last_name, u.phone, u.address, 
+               u.birth_date, u.gender, u.avatar_url, u.is_active, u.email_verified, 
+               u.last_login_at, u.created_at, u.updated_at
       ORDER BY u.id
     `);
     

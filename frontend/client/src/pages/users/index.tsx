@@ -71,6 +71,12 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { insertUserSchema, User } from "@shared/schema";
+
+// Extended User type with role information from the API
+interface UserWithRoles extends User {
+  role_names?: string[];
+  role_slugs?: string[];
+}
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -111,7 +117,7 @@ export default function UsersPage() {
     });
 
   // Fetch users
-  const { data: usersData, isLoading, error } = useQuery<User[]>({
+  const { data: usersData, isLoading, error } = useQuery<UserWithRoles[]>({
     queryKey: ["/api/users"],
   });
 
@@ -668,7 +674,7 @@ export default function UsersPage() {
               </TableHeader>
               <TableBody>
                 {filteredUsers.length > 0 ? (
-                  filteredUsers.map((user: User) => (
+                  filteredUsers.map((user: UserWithRoles) => (
                     <TableRow key={user.id}>
                       <TableCell>
                         <div className="flex items-center">
@@ -698,7 +704,18 @@ export default function UsersPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {user.isAdmin ? (
+                        {user.role_names && user.role_names.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {user.role_names.map((roleName: string, index: number) => (
+                              <Badge 
+                                key={index}
+                                variant={roleName.toLowerCase().includes('admin') ? "default" : "outline"}
+                              >
+                                {roleName}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : user.isAdmin ? (
                           <Badge variant="default">
                             Administrator
                           </Badge>
