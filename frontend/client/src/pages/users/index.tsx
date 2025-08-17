@@ -151,7 +151,8 @@ export default function UsersPage() {
     mutationFn: async (data: z.infer<typeof userFormSchema> & { password: string }) => {
       // Remove confirmPassword before sending to API
       const { confirmPassword, ...userData } = data;
-      return await apiRequest("POST", "/api/register", userData);
+      const response = await apiRequest("POST", "/api/register", userData);
+      return await response.json();
     },
     onSuccess: () => {
       toast({
@@ -176,7 +177,8 @@ export default function UsersPage() {
     mutationFn: async ({ id, data }: { id: number; data: Partial<User> }) => {
       // Remove confirmPassword before sending to API
       const { confirmPassword, ...userData } = data as any;
-      return await apiRequest("PUT", `/api/users/${id}`, userData);
+      const response = await apiRequest("PUT", `/api/users/${id}`, userData);
+      return await response.json();
     },
     onSuccess: () => {
       toast({
@@ -198,7 +200,8 @@ export default function UsersPage() {
   // Delete user mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      return await apiRequest("DELETE", `/api/users/${id}`);
+      const response = await apiRequest("DELETE", `/api/users/${id}`);
+      return await response.json();
     },
     onSuccess: () => {
       toast({
@@ -502,8 +505,8 @@ export default function UsersPage() {
                         <FormItem>
                           <FormLabel>Default Warehouse</FormLabel>
                           <Select
-                            onValueChange={field.onChange}
-                            value={field.value || ""}
+                            onValueChange={(value) => field.onChange(value === "none" ? undefined : value)}
+                            value={field.value || "none"}
                           >
                             <FormControl>
                               <SelectTrigger>
@@ -511,6 +514,7 @@ export default function UsersPage() {
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
+                              <SelectItem value="none">No default warehouse</SelectItem>
                               {warehousesData?.map((warehouse: any) => (
                                 <SelectItem key={warehouse.id} value={warehouse.id}>
                                   {warehouse.name}
@@ -909,8 +913,8 @@ export default function UsersPage() {
                     <FormItem>
                       <FormLabel>Default Warehouse</FormLabel>
                       <Select
-                        onValueChange={field.onChange}
-                        value={field.value || ""}
+                        onValueChange={(value) => field.onChange(value === "none" ? undefined : value)}
+                        value={field.value || "none"}
                       >
                         <FormControl>
                           <SelectTrigger>
@@ -918,7 +922,7 @@ export default function UsersPage() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="">No default warehouse</SelectItem>
+                          <SelectItem value="none">No default warehouse</SelectItem>
                           {warehousesData?.map((warehouse: any) => (
                             <SelectItem key={warehouse.id} value={warehouse.id}>
                               {warehouse.name}

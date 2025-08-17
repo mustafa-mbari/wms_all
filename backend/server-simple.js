@@ -114,21 +114,118 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-app.post('/api/register', (req, res) => {
-  const { username, email, password, firstName, lastName } = req.body;
-  
-  // Simple demo registration
-  const newUser = {
-    id: Date.now(), // Simple ID generation
-    username,
-    email,
-    firstName: firstName || 'New',
-    lastName: lastName || 'User',
-    role: 'user',
-    isActive: true
-  };
-  
-  res.status(201).json(newUser);
+app.post('/api/register', async (req, res) => {
+  try {
+    const { 
+      username, 
+      email, 
+      password, 
+      firstName, 
+      lastName,
+      phone,
+      address,
+      birthDate,
+      gender,
+      isActive = true,
+      isAdmin = false
+    } = req.body;
+
+    // Validate required fields
+    if (!username || !email || !password || !firstName || !lastName) {
+      return res.status(400).json({
+        success: false,
+        error: 'Username, email, password, first name, and last name are required'
+      });
+    }
+
+    // Check if user already exists
+    const existingUser = await pool.query(
+      'SELECT id FROM users WHERE username = $1 OR email = $2',
+      [username, email]
+    );
+
+    if (existingUser.rows.length > 0) {
+      return res.status(409).json({
+        success: false,
+        error: 'User with this username or email already exists'
+      });
+    }
+
+    // Hash password
+    const bcrypt = require('bcrypt');
+    const saltRounds = 10;
+    const passwordHash = await bcrypt.hash(password, saltRounds);
+
+    // Validate gender value
+    const validGenders = ['male', 'female', 'other'];
+    const validatedGender = gender && validGenders.includes(gender) ? gender : null;
+
+    // Start a transaction
+    const client = await pool.connect();
+    
+    try {
+      await client.query('BEGIN');
+      
+      // Insert new user into database
+      const result = await client.query(`
+        INSERT INTO users (
+          username, email, password_hash, first_name, last_name,
+          phone, address, birth_date, gender, is_active, email_verified,
+          created_at, updated_at
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, NOW(), NOW()
+        ) RETURNING id, username, email, first_name, last_name, phone, address, birth_date, gender, is_active
+      `, [
+        username, email, passwordHash, firstName, lastName,
+        phone || null, address || null, birthDate || null, validatedGender,
+        isActive
+      ]);
+
+      const newUser = result.rows[0];
+      
+      // Assign admin role if requested
+      if (isAdmin) {
+        await client.query(`
+          INSERT INTO user_roles (user_id, role_id, assigned_at)
+          SELECT $1, id, NOW() FROM roles WHERE slug = 'admin'
+        `, [newUser.id]);
+      }
+      
+      await client.query('COMMIT');
+      
+      // Get user with role information
+      const userWithRole = await pool.query(`
+        SELECT 
+          u.id, u.username, u.email, u.first_name as "firstName", u.last_name as "lastName",
+          u.phone, u.address, u.birth_date as "birthDate", u.gender, u.is_active as "isActive", 
+          u.email_verified as "emailVerified", u.created_at as "createdAt", u.updated_at as "updatedAt",
+          CASE WHEN r.slug = 'admin' THEN true ELSE false END as "isAdmin"
+        FROM users u
+        LEFT JOIN user_roles ur ON u.id = ur.user_id
+        LEFT JOIN roles r ON ur.role_id = r.id
+        WHERE u.id = $1
+      `, [newUser.id]);
+      
+      console.log('New user created:', userWithRole.rows[0]);
+      
+      res.status(201).json({
+        success: true,
+        data: userWithRole.rows[0],
+        message: 'User created successfully'
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create user: ' + error.message
+    });
+  }
 });
 
 // Simple session storage (in production, use proper session management)
@@ -187,23 +284,26 @@ app.get('/api/users', async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
-        id, 
-        username, 
-        email, 
-        first_name as "firstName", 
-        last_name as "lastName",
-        phone,
-        address,
-        birth_date as "birthDate",
-        gender,
-        avatar_url as "avatarUrl",
-        is_active as "isActive",
-        email_verified as "emailVerified",
-        last_login_at as "lastLoginAt",
-        created_at as "createdAt",
-        updated_at as "updatedAt"
-      FROM users 
-      ORDER BY id
+        u.id, 
+        u.username, 
+        u.email, 
+        u.first_name as "firstName", 
+        u.last_name as "lastName",
+        u.phone,
+        u.address,
+        u.birth_date as "birthDate",
+        u.gender,
+        u.avatar_url as "avatarUrl",
+        u.is_active as "isActive",
+        u.email_verified as "emailVerified",
+        u.last_login_at as "lastLogin",
+        u.created_at as "createdAt",
+        u.updated_at as "updatedAt",
+        CASE WHEN r.slug = 'admin' THEN true ELSE false END as "isAdmin"
+      FROM users u
+      LEFT JOIN user_roles ur ON u.id = ur.user_id
+      LEFT JOIN roles r ON ur.role_id = r.id
+      ORDER BY u.id
     `);
     
     res.json(result.rows);
@@ -258,6 +358,8 @@ app.post('/api/users', async (req, res) => {
 // Update user endpoint
 app.put('/api/users/:id', async (req, res) => {
   try {
+    console.log('PUT /api/users/:id called with:', req.params.id, req.body);
+    
     const { id } = req.params;
     const {
       username,
@@ -268,36 +370,143 @@ app.put('/api/users/:id', async (req, res) => {
       address,
       birthDate,
       gender,
-      isActive
+      isActive,
+      password,
+      isAdmin
     } = req.body;
 
-    const result = await pool.query(`
-      UPDATE users SET
-        username = $2,
-        email = $3,
-        first_name = $4,
-        last_name = $5,
-        phone = $6,
-        address = $7,
-        birth_date = $8,
-        gender = $9,
-        is_active = $10,
-        updated_at = NOW()
-      WHERE id = $1
-      RETURNING 
+    // Validate gender value
+    const validGenders = ['male', 'female', 'other'];
+    const validatedGender = gender && validGenders.includes(gender) ? gender : null;
+
+    console.log('Update user request:', { id, username, email, firstName, lastName, phone, address, birthDate, gender, validatedGender, isActive, password: password ? '[PROVIDED]' : '[NOT PROVIDED]', isAdmin });
+
+    // Start a transaction for updating user and roles
+    const client = await pool.connect();
+    
+    try {
+      await client.query('BEGIN');
+      
+      // Prepare update query - only update basic user fields first
+      let updateQuery = `
+        UPDATE users SET
+          username = $2,
+          email = $3,
+          first_name = $4,
+          last_name = $5,
+          phone = $6,
+          address = $7,
+          birth_date = $8,
+          gender = $9,
+          is_active = $10,
+          updated_at = NOW()
+      `;
+      let queryParams = [id, username, email, firstName, lastName, phone, address, birthDate, validatedGender, isActive];
+      
+      // Add password update if provided
+      if (password && password.trim() !== '') {
+        console.log('Updating password for user', id);
+        const bcrypt = require('bcrypt');
+        const hashedPassword = await bcrypt.hash(password, 10);
+        updateQuery += `, password_hash = $${queryParams.length + 1}`;
+        queryParams.push(hashedPassword);
+      }
+      
+      updateQuery += ` WHERE id = $1 RETURNING 
         id, username, email, first_name as "firstName", last_name as "lastName",
         phone, address, birth_date as "birthDate", gender, is_active as "isActive",
-        created_at as "createdAt", updated_at as "updatedAt"
-    `, [id, username, email, firstName, lastName, phone, address, birthDate, gender, isActive]);
+        created_at as "createdAt", updated_at as "updatedAt"`;
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
+      console.log('Executing update query:', updateQuery);
+      console.log('Query params:', queryParams);
+
+      const result = await client.query(updateQuery, queryParams);
+
+      if (result.rows.length === 0) {
+        console.log('User not found with id:', id);
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      console.log('User updated successfully:', result.rows[0]);
+
+      // Handle admin role assignment - skip if roles table doesn't exist
+      if (typeof isAdmin === 'boolean') {
+        try {
+          console.log('Handling admin role assignment:', isAdmin);
+          
+          // Check if roles table exists
+          const roleCheck = await client.query("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'roles')");
+          
+          if (roleCheck.rows[0].exists) {
+            // Remove existing admin role
+            await client.query('DELETE FROM user_roles WHERE user_id = $1 AND role_id = (SELECT id FROM roles WHERE slug = $2)', [id, 'admin']);
+            
+            // Add admin role if needed
+            if (isAdmin) {
+              await client.query(`
+                INSERT INTO user_roles (user_id, role_id, assigned_at)
+                SELECT $1, id, NOW() FROM roles WHERE slug = 'admin'
+                ON CONFLICT (user_id, role_id) DO NOTHING
+              `, [id]);
+            }
+            console.log('Role assignment completed');
+          } else {
+            console.log('Roles table does not exist, skipping role assignment');
+          }
+        } catch (roleError) {
+          console.log('Role assignment error (non-critical):', roleError.message);
+          // Don't fail the entire update if roles fail
+        }
+      }
+
+      await client.query('COMMIT');
+      console.log('Transaction committed successfully');
+      
+      // Return updated user - simplified version if roles don't work
+      try {
+        const updatedUserResult = await pool.query(`
+          SELECT 
+            u.id, u.username, u.email, u.first_name as "firstName", u.last_name as "lastName",
+            u.phone, u.address, u.birth_date as "birthDate", u.gender, u.is_active as "isActive",
+            u.created_at as "createdAt", u.updated_at as "updatedAt",
+            COALESCE((SELECT CASE WHEN r.slug = 'admin' THEN true ELSE false END 
+                     FROM user_roles ur 
+                     LEFT JOIN roles r ON ur.role_id = r.id 
+                     WHERE ur.user_id = u.id AND r.slug = 'admin' LIMIT 1), false) as "isAdmin"
+          FROM users u
+          WHERE u.id = $1
+        `, [id]);
+
+        if (updatedUserResult.rows.length > 0) {
+          res.json(updatedUserResult.rows[0]);
+        } else {
+          // Fallback to basic user data
+          const basicUser = result.rows[0];
+          basicUser.isAdmin = false; // Default to false if roles don't work
+          res.json(basicUser);
+        }
+      } catch (selectError) {
+        console.log('Error in final select, returning basic user data:', selectError.message);
+        const basicUser = result.rows[0];
+        basicUser.isAdmin = false;
+        res.json(basicUser);
+      }
+      
+    } catch (error) {
+      console.error('Transaction error:', error);
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
-
-    res.json(result.rows[0]);
   } catch (error) {
     console.error('Error updating user:', error);
-    res.status(500).json({ error: 'Failed to update user' });
+    if (error.code === '23505') { // Unique constraint violation
+      res.status(400).json({ error: 'Username or email already exists' });
+    } else {
+      res.status(500).json({ error: 'Failed to update user: ' + error.message });
+    }
   }
 });
 
