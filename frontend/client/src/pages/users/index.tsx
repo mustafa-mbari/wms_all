@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { AdvancedTable, type ColumnDef } from "@/components/ui/advanced-table";
+import { WmTable, type UserWithRoles } from "@/components/tables/wm-table";
 import {
   Card,
   CardContent,
@@ -71,11 +71,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { insertUserSchema, User } from "@shared/schema";
 
-// Extended User type with role information from the API
-interface UserWithRoles extends User {
-  role_names?: string[];
-  role_slugs?: string[];
-}
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -406,14 +401,6 @@ export default function UsersPage() {
     return warehouse ? warehouse.name : warehouseId;
   };
 
-  // Get initials for avatar
-  const getUserInitials = (user: User) => {
-    if (user.firstName && user.lastName) {
-      return `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`;
-    }
-    return user.username.substring(0, 2).toUpperCase();
-  };
-
   // Handle user actions
   const handleEdit = (user: UserWithRoles) => {
     setCurrentUser(user);
@@ -439,186 +426,6 @@ export default function UsersPage() {
   const handleRowClick = (user: UserWithRoles) => {
     console.log("User clicked:", user.username);
   };
-
-  // Define columns for AdvancedTable
-  const columns: ColumnDef<UserWithRoles>[] = [
-    {
-      id: "username",
-      header: "Username",
-      accessorKey: "username",
-      cell: (value, row) => (
-        <div className="flex items-center">
-          <Avatar className="h-8 w-8 mr-2">
-            <AvatarFallback className="bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-100">
-              {getUserInitials(row)}
-            </AvatarFallback>
-          </Avatar>
-          <span className="font-medium">{value}</span>
-        </div>
-      ),
-    },
-    {
-      id: "name",
-      header: "Name",
-      accessorKey: "firstName",
-      cell: (_, row) => {
-        return row.firstName && row.lastName
-          ? `${row.firstName} ${row.lastName}`
-          : "—";
-      },
-    },
-    {
-      id: "email",
-      header: "Email",
-      accessorKey: "email",
-      cell: (value, row) => (
-        <div>
-          <div className="flex items-center">
-            <MailIcon className="h-4 w-4 mr-1 text-muted-foreground" />
-            <span className="text-muted-foreground">{value}</span>
-          </div>
-          {row.phone && (
-            <div className="text-xs text-muted-foreground flex items-center mt-1">
-              <PhoneIcon className="h-3 w-3 mr-1" />
-              {row.phone}
-            </div>
-          )}
-        </div>
-      ),
-    },
-    {
-      id: "role",
-      header: "Role",
-      accessorKey: "role_names",
-      cell: (_, row) => (
-        <div>
-          {row.role_names && row.role_names.length > 0 ? (
-            <div className="flex flex-wrap gap-1">
-              {row.role_names.map((roleName: string, index: number) => (
-                <Badge 
-                  key={index}
-                  variant={roleName.toLowerCase().includes('admin') ? "default" : "outline"}
-                >
-                  {roleName}
-                </Badge>
-              ))}
-            </div>
-          ) : row.isAdmin ? (
-            <Badge variant="default">Administrator</Badge>
-          ) : (
-            <Badge variant="outline">User</Badge>
-          )}
-          {row.defaultWarehouseId && (
-            <div className="text-xs text-muted-foreground flex items-center mt-1">
-              <Building className="h-3 w-3 mr-1" />
-              {getWarehouseName(row.defaultWarehouseId)}
-            </div>
-          )}
-        </div>
-      ),
-    },
-    {
-      id: "status",
-      header: "Status",
-      accessorKey: "isActive",
-      cell: (value, row) => (
-        <div>
-          {value ? (
-            <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
-              <CheckCircle className="mr-1 h-3 w-3" /> Active
-            </Badge>
-          ) : (
-            <Badge variant="outline" className="border-red-200 text-red-800 dark:border-red-800 dark:text-red-300">
-              <XCircle className="mr-1 h-3 w-3" /> Inactive
-            </Badge>
-          )}
-          {row.lastLogin && (
-            <div className="text-xs text-muted-foreground mt-1">
-              Last login: {new Date(row.lastLogin).toLocaleDateString()}
-            </div>
-          )}
-        </div>
-      ),
-    },
-    {
-      id: "actions",
-      header: "Actions",
-      cell: (_, row) => (
-        <div className="flex items-center gap-1">
-          {canPerformAdminActions && (
-            <>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleEdit(row);
-                }}
-              >
-                <Edit className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-destructive hover:text-destructive"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelete(row);
-                }}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </>
-          )}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <MoreHorizontal className="h-4 w-4" />
-                <span className="sr-only">Open menu</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              
-              {canPerformAdminActions && (
-                <>
-                  <DropdownMenuItem onClick={() => handleEdit(row)}>
-                    <Edit className="mr-2 h-4 w-4" /> Edit
-                  </DropdownMenuItem>
-                  <DropdownMenuItem 
-                    onClick={() => {
-                      setCurrentUser(row);
-                      setIsRoleDialogOpen(true);
-                    }}
-                  >
-                    <ShieldIcon className="mr-2 h-4 w-4" /> Manage Roles
-                  </DropdownMenuItem>
-                  <DropdownMenuItem 
-                    onClick={() => {
-                      setCurrentUser(row);
-                      setIsPasswordDialogOpen(true);
-                    }}
-                  >
-                    <KeyIcon className="mr-2 h-4 w-4" /> Reset Password
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem 
-                    onClick={() => handleDelete(row)}
-                    className="text-red-600"
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" /> Delete
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      ),
-      filterable: false,
-    },
-  ];
 
   if (isLoading) {
     return (
@@ -914,10 +721,15 @@ export default function UsersPage() {
           </div>
 
           {/* Enhanced Table with Search, Filter, and Column Controls */}
-          <AdvancedTable
+          <WmTable
             data={filteredUsers}
-            columns={columns}
             onRowClick={handleRowClick}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onManageRoles={handleRoleChange}
+            onChangePassword={handlePasswordChange}
+            canPerformAdminActions={canPerformAdminActions}
+            getWarehouseName={getWarehouseName}
             searchable={true}
             groupable={true}
             sortable={true}
