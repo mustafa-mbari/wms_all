@@ -12,6 +12,7 @@ import OrdersPage from "@/pages/orders";
 import WarehousesPage from "@/pages/warehouses";
 import UsersPage from "@/pages/users";
 import SettingsPage from "@/pages/settings";
+import ProfilePage from "@/pages/profile";
 import AuthPage from "@/pages/login-simple";
 import { ProtectedRoute } from "./lib/protected-route";
 import { AuthProvider } from "./hooks/use-auth";
@@ -33,6 +34,7 @@ function Router() {
       <ProtectedRoute path="/orders/new" component={OrdersPage} />
       <ProtectedRoute path="/warehouses" component={WarehousesPage} />
       <ProtectedRoute path="/users" component={UsersPage} />
+      <ProtectedRoute path="/profile" component={ProfilePage} />
       <ProtectedRoute path="/settings" component={SettingsPage} />
       <ProtectedRoute path="/settings/profile" component={SettingsPage} />
       <Route path="/auth" component={AuthPage} />

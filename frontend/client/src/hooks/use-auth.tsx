@@ -8,16 +8,32 @@ import { insertUserSchema, User as SelectUser, InsertUser } from "@shared/schema
 import { getQueryFn, apiRequest, queryClient } from "../lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
-type AuthContextType = {
-  user: SelectUser | null;
+interface UserWithRoles extends SelectUser {
+  role_names?: string[];
+  role_slugs?: string[];
+}
+
+interface Role {
+  id: number;
+  name: string;
+  slug: string;
+  description?: string;
+  createdAt: string;
+}
+
+interface AuthContextType {
+  user: UserWithRoles | null;
   isLoading: boolean;
-  error: Error | null;
-  loginMutation: UseMutationResult<SelectUser, Error, LoginData>;
-  logoutMutation: UseMutationResult<void, Error, void>;
-  registerMutation: UseMutationResult<SelectUser, Error, InsertUser>;
-};
+  login: (credentials: { username: string; password: string }) => Promise<void>;
+  register: (userData: RegisterData) => Promise<void>;
+  logout: () => void;
+  isSuperAdmin: () => boolean;
+  isAdmin: () => boolean;
+  hasRole: (roleSlug: string) => boolean;
+}
 
 type LoginData = Pick<InsertUser, "username" | "password">;
+type RegisterData = InsertUser;
 
 export const AuthContext = createContext<AuthContextType | null>(null);
 
@@ -27,7 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     data: user,
     error,
     isLoading,
-  } = useQuery<SelectUser | null, Error>({
+  } = useQuery<UserWithRoles | null, Error>({
     queryKey: ["/api/user"],
     queryFn: getQueryFn({ on401: "returnNull" }),
   });
@@ -37,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await apiRequest("POST", "/api/login", credentials);
       return await res.json();
     },
-    onSuccess: (user: SelectUser) => {
+    onSuccess: (user: UserWithRoles) => {
       queryClient.setQueryData(["/api/user"], user);
       toast({
         title: "Login successful",
@@ -58,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await apiRequest("POST", "/api/register", credentials);
       return await res.json();
     },
-    onSuccess: (user: SelectUser) => {
+    onSuccess: (user: UserWithRoles) => {
       queryClient.setQueryData(["/api/user"], user);
       toast({
         title: "Registration successful",
@@ -76,33 +92,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest("POST", "/api/logout");
+      await apiRequest("POST", "/api/logout", {});
     },
     onSuccess: () => {
       queryClient.setQueryData(["/api/user"], null);
       toast({
-        title: "Logged out",
-        description: "You have been successfully logged out",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Logout failed",
-        description: error.message,
-        variant: "destructive",
+        title: "Logout successful",
+        description: "You have been logged out.",
       });
     },
   });
+
+  // Helper functions for role checking
+  const isSuperAdmin = () => {
+    return user?.role_slugs?.includes('super-admin') ?? false;
+  };
+
+  const isAdmin = () => {
+    return (user?.role_slugs?.includes('admin') || user?.role_slugs?.includes('super-admin')) ?? false;
+  };
+
+  const hasRole = (roleSlug: string) => {
+    return user?.role_slugs?.includes(roleSlug) ?? false;
+  };
 
   return (
     <AuthContext.Provider
       value={{
         user: user ?? null,
         isLoading,
-        error,
-        loginMutation,
-        logoutMutation,
-        registerMutation,
+        login: async (credentials) => { await loginMutation.mutateAsync(credentials); },
+        register: async (userData) => { await registerMutation.mutateAsync(userData); },
+        logout: () => logoutMutation.mutate(),
+        isSuperAdmin,
+        isAdmin,
+        hasRole,
       }}
     >
       {children}

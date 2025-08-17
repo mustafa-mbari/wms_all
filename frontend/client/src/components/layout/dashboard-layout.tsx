@@ -86,6 +86,21 @@ const navigation = [
 function AppSidebar() {
   const [location] = useLocation();
   const [openMenus, setOpenMenus] = useState<string[]>([]);
+  const { isSuperAdmin, isAdmin, hasRole } = useAuth();
+
+  // Filter menu items based on user permissions
+  const getFilteredMenuItems = () => {
+    return navigation.filter((item: any) => {
+      // Users page - only accessible to Super Admin, Admin, and Manager
+      if (item.href === "/users") {
+        return isSuperAdmin() || isAdmin() || hasRole('manager');
+      }
+      // All other pages are accessible to everyone
+      return true;
+    });
+  };
+
+  const filteredMenuItems = getFilteredMenuItems();
 
   // Toggle submenu and close others
   const toggleMenu = (menuName: string) => {
@@ -128,7 +143,7 @@ function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu className="gap-2">
-              {navigation.map((item) => {
+              {filteredMenuItems.map((item) => {
                 const isActive = location === item.href || 
                   (item.href !== "/" && location.startsWith(item.href));
                 const isMenuOpen = openMenus.includes(item.name);
@@ -225,15 +240,12 @@ function AppSidebar() {
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
-  const { user, logoutMutation } = useAuth();
+  const { user, logout } = useAuth();
   const [, setLocation] = useLocation();
 
   const handleLogout = () => {
-    logoutMutation.mutate(undefined, {
-      onSuccess: () => {
-        setLocation('/');
-      }
-    });
+    logout();
+    setLocation('/');
   };
 
   const getUserInitials = (user: any) => {
@@ -301,28 +313,46 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   <div className="flex flex-col space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium leading-none">
-                        {user?.username || 'User'}
+                        {getUserDisplayName(user)}
                       </span>
-                      <Badge 
-                        variant={getRoleBadgeVariant((user as any)?.role || 'user')}
-                        className="text-xs"
-                      >
-                        {(user as any)?.role || 'user'}
-                      </Badge>
+                      <div className="flex gap-1">
+                        {(user as any)?.role_names && (user as any)?.role_names.length > 0 ? (
+                          (user as any).role_names.map((role: string) => (
+                            <Badge 
+                              key={role}
+                              variant={getRoleBadgeVariant(role.toLowerCase())}
+                              className="text-xs"
+                            >
+                              {role}
+                            </Badge>
+                          ))
+                        ) : (
+                          <Badge variant="outline" className="text-xs">
+                            No Role
+                          </Badge>
+                        )}
+                      </div>
                     </div>
+                    <span className="text-xs text-muted-foreground">
+                      {user?.email}
+                    </span>
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuLabel className="font-normal text-muted-foreground">
                   My Account
                 </DropdownMenuLabel>
-                <DropdownMenuItem>
-                  <User className="mr-2 h-4 w-4" />
-                  <span>Profile</span>
+                <DropdownMenuItem asChild>
+                  <Link href="/profile">
+                    <User className="mr-2 h-4 w-4" />
+                    <span>Profile</span>
+                  </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span>Settings</span>
+                <DropdownMenuItem asChild>
+                  <Link href="/settings">
+                    <Settings className="mr-2 h-4 w-4" />
+                    <span>Settings</span>
+                  </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} className="text-red-600 focus:text-red-600">

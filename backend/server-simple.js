@@ -94,11 +94,24 @@ app.post('/api/login', async (req, res) => {
     // Update last login
     await pool.query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [user.id]);
 
-    // Return user without password, add role field for compatibility
+    // Get user roles
+    const rolesResult = await pool.query(`
+      SELECT r.name, r.slug
+      FROM user_roles ur
+      JOIN roles r ON ur.role_id = r.id
+      WHERE ur.user_id = $1
+    `, [user.id]);
+
+    const roleNames = rolesResult.rows.map(role => role.name);
+    const roleSlugs = rolesResult.rows.map(role => role.slug);
+
+    // Return user without password, include role information
     const { password_hash, ...userWithoutPassword } = user;
     const userResponse = {
       ...userWithoutPassword,
-      role: user.username === 'admin' ? 'admin' : 'user' // Simple role assignment
+      role: roleSlugs.includes('super-admin') ? 'super-admin' : roleSlugs.includes('admin') ? 'admin' : 'user',
+      role_names: roleNames,
+      role_slugs: roleSlugs
     };
     
     // Set current user for demo session
@@ -183,11 +196,18 @@ app.post('/api/register', async (req, res) => {
 
       const newUser = result.rows[0];
       
-      // Assign admin role if requested
+      // Assign role to new user
       if (isAdmin) {
+        // Assign admin role if requested
         await client.query(`
           INSERT INTO user_roles (user_id, role_id, assigned_at)
           SELECT $1, id, NOW() FROM roles WHERE slug = 'admin'
+        `, [newUser.id]);
+      } else {
+        // Assign default viewer role to regular users
+        await client.query(`
+          INSERT INTO user_roles (user_id, role_id, assigned_at)
+          SELECT $1, id, NOW() FROM roles WHERE slug = 'viewer'
         `, [newUser.id]);
       }
       
@@ -198,19 +218,34 @@ app.post('/api/register', async (req, res) => {
         SELECT 
           u.id, u.username, u.email, u.first_name as "firstName", u.last_name as "lastName",
           u.phone, u.address, u.birth_date as "birthDate", u.gender, u.is_active as "isActive", 
-          u.email_verified as "emailVerified", u.created_at as "createdAt", u.updated_at as "updatedAt",
-          CASE WHEN r.slug = 'admin' THEN true ELSE false END as "isAdmin"
+          u.email_verified as "emailVerified", u.created_at as "createdAt", u.updated_at as "updatedAt"
         FROM users u
-        LEFT JOIN user_roles ur ON u.id = ur.user_id
-        LEFT JOIN roles r ON ur.role_id = r.id
         WHERE u.id = $1
       `, [newUser.id]);
+
+      // Get user roles
+      const rolesResult = await pool.query(`
+        SELECT r.name, r.slug
+        FROM user_roles ur
+        JOIN roles r ON ur.role_id = r.id
+        WHERE ur.user_id = $1
+      `, [newUser.id]);
+
+      const roleNames = rolesResult.rows.map(role => role.name);
+      const roleSlugs = rolesResult.rows.map(role => role.slug);
+
+      const userResponse = {
+        ...userWithRole.rows[0],
+        isAdmin: roleSlugs.includes('admin') || roleSlugs.includes('super-admin'),
+        role_names: roleNames,
+        role_slugs: roleSlugs
+      };
       
-      console.log('New user created:', userWithRole.rows[0]);
+      console.log('New user created:', userResponse);
       
       res.status(201).json({
         success: true,
-        data: userWithRole.rows[0],
+        data: userResponse,
         message: 'User created successfully'
       });
     } catch (error) {
@@ -692,6 +727,264 @@ app.get('/api/dashboard/activities', (req, res) => {
   ];
   
   res.json(mockActivities);
+});
+
+// Get all roles - for role management dropdown
+app.get('/api/roles', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT id, name, slug, description, created_at as "createdAt"
+      FROM roles
+      ORDER BY name
+    `);
+    
+    res.json({
+      success: true,
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Get roles error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch roles'
+    });
+  }
+});
+
+// Update user role - Super Admin only
+app.put('/api/users/:id/role', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { roleId } = req.body;
+    
+    // Check if current user is super admin
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        error: 'Not authenticated'
+      });
+    }
+    
+    // Check if current user has super admin privileges
+    const currentUserRoles = await pool.query(`
+      SELECT r.slug
+      FROM user_roles ur
+      JOIN roles r ON ur.role_id = r.id
+      WHERE ur.user_id = $1
+    `, [currentUser.id]);
+    
+    const isSuperAdmin = currentUserRoles.rows.some(row => row.slug === 'super-admin');
+    
+    if (!isSuperAdmin) {
+      return res.status(403).json({
+        success: false,
+        error: 'Only Super Admin can change user roles'
+      });
+    }
+    
+    const client = await pool.connect();
+    
+    try {
+      await client.query('BEGIN');
+      
+      // Remove existing roles for the user
+      await client.query('DELETE FROM user_roles WHERE user_id = $1', [id]);
+      
+      // Add new role if provided
+      if (roleId) {
+        await client.query(`
+          INSERT INTO user_roles (user_id, role_id, assigned_at)
+          VALUES ($1, $2, NOW())
+        `, [id, roleId]);
+      }
+      
+      await client.query('COMMIT');
+      
+      res.json({
+        success: true,
+        message: 'User role updated successfully'
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Update user role error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update user role'
+    });
+  }
+});
+
+// Update user password - restricted based on role
+app.put('/api/users/:id/password', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { password, currentPassword } = req.body;
+    
+    // Check if user is authenticated
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        error: 'Not authenticated'
+      });
+    }
+    
+    // Users can only change their own password unless they're super admin
+    const currentUserRoles = await pool.query(`
+      SELECT r.slug
+      FROM user_roles ur
+      JOIN roles r ON ur.role_id = r.id
+      WHERE ur.user_id = $1
+    `, [currentUser.id]);
+    
+    const isSuperAdmin = currentUserRoles.rows.some(row => row.slug === 'super-admin');
+    const isOwnPassword = currentUser.id.toString() === id;
+    
+    if (!isSuperAdmin && !isOwnPassword) {
+      return res.status(403).json({
+        success: false,
+        error: 'You can only change your own password'
+      });
+    }
+    
+    // If changing own password, verify current password
+    if (isOwnPassword && !isSuperAdmin) {
+      const user = await pool.query('SELECT password_hash FROM users WHERE id = $1', [id]);
+      const bcrypt = require('bcrypt');
+      const isValid = await bcrypt.compare(currentPassword, user.rows[0].password_hash);
+      
+      if (!isValid) {
+        return res.status(400).json({
+          success: false,
+          error: 'Current password is incorrect'
+        });
+      }
+    }
+    
+    // Hash new password
+    const bcrypt = require('bcrypt');
+    const saltRounds = 10;
+    const passwordHash = await bcrypt.hash(password, saltRounds);
+    
+    // Update password
+    await pool.query(
+      'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2',
+      [passwordHash, id]
+    );
+    
+    res.json({
+      success: true,
+      message: 'Password updated successfully'
+    });
+  } catch (error) {
+    console.error('Update password error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update password'
+    });
+  }
+});
+
+// Get user profile by ID
+app.get('/api/users/:id/profile', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const result = await pool.query(`
+      SELECT 
+        u.id, u.username, u.email, u.first_name as "firstName", u.last_name as "lastName",
+        u.phone, u.address, u.birth_date as "birthDate", u.gender, u.is_active as "isActive", 
+        u.email_verified as "emailVerified", u.created_at as "createdAt", u.updated_at as "updatedAt",
+        array_agg(DISTINCT r.name) FILTER (WHERE r.name IS NOT NULL) as "role_names",
+        array_agg(DISTINCT r.slug) FILTER (WHERE r.slug IS NOT NULL) as "role_slugs",
+        bool_or(CASE WHEN r.slug = 'admin' OR r.slug = 'super-admin' THEN true ELSE false END) as "isAdmin"
+      FROM users u
+      LEFT JOIN user_roles ur ON u.id = ur.user_id
+      LEFT JOIN roles r ON ur.role_id = r.id
+      WHERE u.id = $1
+      GROUP BY u.id, u.username, u.email, u.first_name, u.last_name, u.phone, u.address, u.birth_date, u.gender, u.is_active, u.email_verified, u.created_at, u.updated_at
+    `, [id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Get user profile error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch user profile'
+    });
+  }
+});
+
+// Update user profile
+app.put('/api/users/:id/profile', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { firstName, lastName, phone, address, birthDate, gender } = req.body;
+    
+    // Check if user is authenticated
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        error: 'Not authenticated'
+      });
+    }
+    
+    // Users can only update their own profile unless they're super admin
+    const currentUserRoles = await pool.query(`
+      SELECT r.slug
+      FROM user_roles ur
+      JOIN roles r ON ur.role_id = r.id
+      WHERE ur.user_id = $1
+    `, [currentUser.id]);
+    
+    const isSuperAdmin = currentUserRoles.rows.some(row => row.slug === 'super-admin');
+    const isOwnProfile = currentUser.id.toString() === id;
+    
+    if (!isSuperAdmin && !isOwnProfile) {
+      return res.status(403).json({
+        success: false,
+        error: 'You can only update your own profile'
+      });
+    }
+    
+    // Validate gender value
+    const validGenders = ['male', 'female', 'other'];
+    const validatedGender = gender && validGenders.includes(gender) ? gender : null;
+    
+    // Update user profile
+    const result = await pool.query(`
+      UPDATE users 
+      SET first_name = $1, last_name = $2, phone = $3, address = $4, birth_date = $5, gender = $6, updated_at = NOW()
+      WHERE id = $7
+      RETURNING id, username, email, first_name as "firstName", last_name as "lastName", phone, address, birth_date as "birthDate", gender
+    `, [firstName, lastName, phone || null, address || null, birthDate || null, validatedGender, id]);
+    
+    res.json({
+      success: true,
+      data: result.rows[0],
+      message: 'Profile updated successfully'
+    });
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update profile'
+    });
+  }
 });
 
 // Error handling middleware

@@ -1,8 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
   TableBody,
@@ -43,13 +46,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import {
   Loader2,
   Plus,
   Search,
   FilterX,
+  RefreshCw,
   UserPlus,
   Save,
   Edit,
@@ -63,9 +66,12 @@ import {
   MailIcon,
   PhoneIcon,
   Building,
-  MapPin
+  MapPin,
+  KeyIcon,
+  ShieldIcon
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -89,14 +95,48 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 export default function UsersPage() {
   const { toast } = useToast();
+  const { user: currentAuthUser, isSuperAdmin, hasRole, isAdmin } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState("_all");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
+  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState<UserWithRoles | null>(null);
   const [sortBy, setSortBy] = useState("username");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+
+  // Check if user can access this page
+  const canAccessUsersPage = isSuperAdmin() || isAdmin() || hasRole('manager');
+  
+  // Check if user can perform admin actions (create, edit, delete, role management)
+  const canPerformAdminActions = isSuperAdmin();
+
+  // If user doesn't have access to users page, show access denied
+  if (!canAccessUsersPage) {
+    return (
+      <DashboardLayout>
+        <Card className="border-red-200 dark:border-red-800">
+          <CardHeader>
+            <div className="flex items-center">
+              <XCircle className="h-5 w-5 text-red-500 mr-2" />
+              <CardTitle>Access Denied</CardTitle>
+            </div>
+            <CardDescription>
+              You don't have permission to access the Users page.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p>Only Super Admins, Admins, and Managers can view user information.</p>
+            <Button variant="outline" className="mt-4" onClick={() => window.history.back()}>
+              Go Back
+            </Button>
+          </CardContent>
+        </Card>
+      </DashboardLayout>
+    );
+  }
 
   // Define form schema with zod
   const userFormSchema = insertUserSchema
@@ -117,14 +157,29 @@ export default function UsersPage() {
     });
 
   // Fetch users
-  const { data: usersData, isLoading, error } = useQuery<UserWithRoles[]>({
+  const { data: usersData, isLoading, error, refetch: refetchUsers } = useQuery<UserWithRoles[]>({
     queryKey: ["/api/users"],
+    staleTime: 0, // Always consider data stale
+    refetchOnMount: true, // Refetch when component mounts
+    refetchOnWindowFocus: true, // Refetch when window gets focus
+    refetchInterval: 30000, // Refetch every 30 seconds
+  });
+
+  // Fetch roles for role management
+  const { data: rolesData } = useQuery<Array<{id: number, name: string, slug: string, description?: string}>>({
+    queryKey: ["/api/roles"],
+    select: (data: any) => data?.data || [], // Extract the data array from the response
   });
 
   // Fetch warehouses for default warehouse assignment
   const { data: warehousesData } = useQuery<any[]>({
     queryKey: ["/api/warehouses"],
   });
+
+  // Force refresh users data when component mounts
+  useEffect(() => {
+    refetchUsers();
+  }, [refetchUsers]);
 
   // Create form for new user
   const createForm = useForm<z.infer<typeof userFormSchema>>({
@@ -227,6 +282,53 @@ export default function UsersPage() {
     },
   });
 
+  // Update user role mutation - Super Admin only
+  const updateRoleMutation = useMutation({
+    mutationFn: async ({ userId, roleId }: { userId: number; roleId: number | null }) => {
+      const response = await apiRequest("PUT", `/api/users/${userId}/role`, { roleId });
+      return await response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Role Updated",
+        description: "User role has been updated successfully",
+      });
+      setIsRoleDialogOpen(false);
+      setCurrentUser(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: `Failed to update role: ${error.message}`,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Update user password mutation
+  const updatePasswordMutation = useMutation({
+    mutationFn: async ({ userId, password, currentPassword }: { userId: number; password: string; currentPassword?: string }) => {
+      const response = await apiRequest("PUT", `/api/users/${userId}/password`, { password, currentPassword });
+      return await response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Password Updated",
+        description: "Password has been updated successfully",
+      });
+      setIsPasswordDialogOpen(false);
+      setCurrentUser(null);
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: `Failed to update password: ${error.message}`,
+        variant: "destructive",
+      });
+    },
+  });
+
   const onCreateSubmit = (data: any) => {
     if (!data.password) {
       toast({
@@ -282,17 +384,27 @@ export default function UsersPage() {
     }
   };
 
+  const handleRoleChange = (user: UserWithRoles) => {
+    setCurrentUser(user);
+    setIsRoleDialogOpen(true);
+  };
+
+  const handlePasswordChange = (user: UserWithRoles) => {
+    setCurrentUser(user);
+    setIsPasswordDialogOpen(true);
+  };
+
   // Filter and sort users
   const filteredUsers = usersData ? [...usersData]
-    .filter((user: User) => {
+    .filter((user: UserWithRoles) => {
       const matchesSearch = !searchTerm || 
         user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
         user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
         `${user.firstName} ${user.lastName}`.toLowerCase().includes(searchTerm.toLowerCase());
       
       const matchesRole = roleFilter === "_all" || 
-        (roleFilter === "admin" && user.isAdmin) ||
-        (roleFilter === "user" && !user.isAdmin);
+        (roleFilter === "admin" && (user.role_slugs?.includes('admin') || user.role_slugs?.includes('super-admin'))) ||
+        (roleFilter === "user" && (!user.role_slugs || user.role_slugs.length === 0 || user.role_slugs?.includes('employee') || user.role_slugs?.includes('viewer') || user.role_slugs?.includes('manager')));
       
       return matchesSearch && matchesRole;
     })
@@ -374,18 +486,25 @@ export default function UsersPage() {
     <DashboardLayout>
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">User Management</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            User Management {!canPerformAdminActions && "(Read Only)"}
+          </h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Manage users and their permissions
+            {canPerformAdminActions 
+              ? "Manage users and their permissions" 
+              : "View user information (read-only access)"
+            }
           </p>
         </div>
         <div className="mt-4 sm:mt-0 flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" /> New User
-              </Button>
-            </DialogTrigger>
+          {/* Only Super Admins can create new users */}
+          {canPerformAdminActions && (
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" /> New User
+                </Button>
+              </DialogTrigger>
             <DialogContent className="sm:max-w-[600px]">
               <DialogHeader>
                 <DialogTitle>Create New User</DialogTitle>
@@ -595,6 +714,7 @@ export default function UsersPage() {
               </Form>
             </DialogContent>
           </Dialog>
+          )}
         </div>
       </div>
 
@@ -604,6 +724,15 @@ export default function UsersPage() {
           <CardDescription>
             View and manage all system users
           </CardDescription>
+          {/* Show read-only notice for non-Super Admins */}
+          {!canPerformAdminActions && (
+            <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-900">
+              <p className="text-sm text-blue-800 dark:text-blue-200">
+                <strong>Read-Only Access:</strong> You can view user information but cannot create, edit, or delete users. 
+                Contact a Super Admin to make changes to user accounts.
+              </p>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           <div className="mb-4 flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
@@ -637,6 +766,9 @@ export default function UsersPage() {
                 <FilterX className="mr-2 h-4 w-4" /> Clear Filters
               </Button>
             )}
+            <Button variant="outline" onClick={() => refetchUsers()}>
+              <RefreshCw className="mr-2 h-4 w-4" /> Refresh
+            </Button>
           </div>
 
           <div className="border rounded-md">
@@ -758,21 +890,65 @@ export default function UsersPage() {
                           <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => handleEdit(user)}>
-                              <Edit className="mr-2 h-4 w-4" /> Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDelete(user)}>
-                              <Trash2 className="mr-2 h-4 w-4 text-red-500" /> Delete
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            {user.isActive ? (
-                              <DropdownMenuItem onClick={() => updateMutation.mutate({ id: user.id, data: { isActive: false } })}>
-                                <LockIcon className="mr-2 h-4 w-4" /> Deactivate
+                            
+                            {/* Edit and Delete - Super Admin only */}
+                            {canPerformAdminActions && (
+                              <>
+                                <DropdownMenuItem onClick={() => handleEdit(user)}>
+                                  <Edit className="mr-2 h-4 w-4" /> Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleDelete(user)}>
+                                  <Trash2 className="mr-2 h-4 w-4 text-red-500" /> Delete
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                              </>
+                            )}
+                            
+                            {/* Role management - Super Admin only */}
+                            {canPerformAdminActions && (
+                              <DropdownMenuItem onClick={() => handleRoleChange(user)}>
+                                <ShieldIcon className="mr-2 h-4 w-4" /> Change Role
                               </DropdownMenuItem>
-                            ) : (
-                              <DropdownMenuItem onClick={() => updateMutation.mutate({ id: user.id, data: { isActive: true } })}>
-                                <UnlockIcon className="mr-2 h-4 w-4" /> Activate
+                            )}
+                            
+                            {/* Password change - Super Admin or own account */}
+                            {(canPerformAdminActions || currentAuthUser?.id === user.id) && (
+                              <DropdownMenuItem onClick={() => handlePasswordChange(user)}>
+                                <KeyIcon className="mr-2 h-4 w-4" /> Change Password
                               </DropdownMenuItem>
+                            )}
+                            
+                            {/* Activate/Deactivate - Super Admin only */}
+                            {canPerformAdminActions && (
+                              <>
+                                <DropdownMenuSeparator />
+                                {user.isActive ? (
+                                  <DropdownMenuItem onClick={() => updateMutation.mutate({ id: user.id, data: { isActive: false } })}>
+                                    <LockIcon className="mr-2 h-4 w-4" /> Deactivate
+                                  </DropdownMenuItem>
+                                ) : (
+                                  <DropdownMenuItem onClick={() => updateMutation.mutate({ id: user.id, data: { isActive: true } })}>
+                                    <UnlockIcon className="mr-2 h-4 w-4" /> Activate
+                                  </DropdownMenuItem>
+                                )}
+                              </>
+                            )}
+                            
+                            {/* If not super admin and not own account, show limited options */}
+                            {!canPerformAdminActions && currentAuthUser?.id !== user.id && (
+                              <DropdownMenuItem disabled>
+                                <span className="text-muted-foreground">View Only - No Actions Available</span>
+                              </DropdownMenuItem>
+                            )}
+                            
+                            {/* If no actions available at all */}
+                            {!canPerformAdminActions && currentAuthUser?.id !== user.id && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem disabled>
+                                  <span className="text-xs text-muted-foreground">Contact Super Admin for user changes</span>
+                                </DropdownMenuItem>
+                              </>
                             )}
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -1093,6 +1269,145 @@ export default function UsersPage() {
               Delete User
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Role Management Dialog - Super Admin only */}
+      {canPerformAdminActions && (
+        <Dialog open={isRoleDialogOpen} onOpenChange={setIsRoleDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Change User Role</DialogTitle>
+              <DialogDescription>
+                Update the role for {currentUser?.firstName} {currentUser?.lastName} ({currentUser?.username})
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label>Current Roles</Label>
+                <div className="flex gap-2 mt-1">
+                  {currentUser?.role_names?.map((role) => (
+                    <Badge key={role} variant="secondary">{role}</Badge>
+                  )) || <Badge variant="outline">No Role</Badge>}
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="role-select">New Role</Label>
+                <Select 
+                  onValueChange={(value) => {
+                    if (currentUser) {
+                      const roleId = value === "none" ? null : parseInt(value);
+                      updateRoleMutation.mutate({ userId: currentUser.id, roleId });
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No Role</SelectItem>
+                    {rolesData?.map((role) => (
+                      <SelectItem key={role.id} value={role.id.toString()}>
+                        {role.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsRoleDialogOpen(false)}>
+                Cancel
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Password Change Dialog */}
+      <Dialog open={isPasswordDialogOpen} onOpenChange={setIsPasswordDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change Password</DialogTitle>
+            <DialogDescription>
+              Update the password for {currentUser?.firstName} {currentUser?.lastName} ({currentUser?.username})
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            const formData = new FormData(e.currentTarget);
+            const password = formData.get('password') as string;
+            const currentPassword = formData.get('currentPassword') as string;
+            const confirmPassword = formData.get('confirmPassword') as string;
+            
+            if (password !== confirmPassword) {
+              toast({
+                title: "Error",
+                description: "Passwords don't match",
+                variant: "destructive",
+              });
+              return;
+            }
+            
+            if (currentUser) {
+              updatePasswordMutation.mutate({ 
+                userId: currentUser.id, 
+                password,
+                currentPassword: currentAuthUser?.id === currentUser.id ? currentPassword : undefined
+              });
+            }
+          }}>
+            <div className="space-y-4">
+              {/* Only require current password if changing own password and not super admin */}
+              {currentAuthUser?.id === currentUser?.id && !isSuperAdmin() && (
+                <div>
+                  <Label htmlFor="currentPassword">Current Password</Label>
+                  <Input
+                    id="currentPassword"
+                    name="currentPassword"
+                    type="password"
+                    required
+                  />
+                </div>
+              )}
+              <div>
+                <Label htmlFor="password">New Password</Label>
+                <Input
+                  id="password"
+                  name="password"
+                  type="password"
+                  required
+                  minLength={6}
+                />
+              </div>
+              <div>
+                <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                <Input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type="password"
+                  required
+                  minLength={6}
+                />
+              </div>
+            </div>
+            <DialogFooter className="mt-4">
+              <Button variant="outline" type="button" onClick={() => setIsPasswordDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button 
+                type="submit"
+                disabled={updatePasswordMutation.isPending}
+              >
+                {updatePasswordMutation.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <KeyIcon className="mr-2 h-4 w-4" />
+                )}
+                Update Password
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </DashboardLayout>

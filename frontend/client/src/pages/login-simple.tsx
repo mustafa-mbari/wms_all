@@ -8,7 +8,8 @@ export default function AuthPage() {
   const [activeTab, setActiveTab] = useState("login");
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const { loginMutation, registerMutation, user } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);
+  const { login, register, user } = useAuth();
 
   // Redirect to dashboard when user becomes authenticated
   useEffect(() => {
@@ -20,6 +21,7 @@ export default function AuthPage() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
+    setIsLoading(true);
 
     const formData = new FormData(e.currentTarget);
     const username = formData.get("username") as string;
@@ -27,10 +29,10 @@ export default function AuthPage() {
 
     try {
       if (activeTab === "login") {
-        await loginMutation.mutateAsync({ username, password });
+        await login({ username, password });
       } else {
         const email = formData.get("email") as string;
-        await registerMutation.mutateAsync({ 
+        await register({ 
           username, 
           email, 
           password,
@@ -42,6 +44,8 @@ export default function AuthPage() {
       }
     } catch (err: any) {
       setError(err.message || "Something went wrong");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -177,10 +181,10 @@ export default function AuthPage() {
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={loginMutation.isPending || registerMutation.isPending}
+                disabled={isLoading}
                 className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold py-4 px-6 rounded-xl hover:from-blue-700 hover:to-purple-700 focus:ring-4 focus:ring-blue-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
               >
-                {(loginMutation.isPending || registerMutation.isPending) ? (
+                {isLoading ? (
                   <>
                     <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
