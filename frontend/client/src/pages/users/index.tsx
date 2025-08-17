@@ -730,11 +730,6 @@ export default function UsersPage() {
             onChangePassword={handlePasswordChange}
             canPerformAdminActions={canPerformAdminActions}
             getWarehouseName={getWarehouseName}
-            searchable={true}
-            groupable={true}
-            sortable={true}
-            pagination={true}
-            pageSize={10}
             className="shadow-sm"
           />
 

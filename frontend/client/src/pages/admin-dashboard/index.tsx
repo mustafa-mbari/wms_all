@@ -127,12 +127,8 @@ export default function AdminDashboard() {
                 data={recentUsers}
                 onRowClick={handleUserClick}
                 getWarehouseName={getWarehouseName}
-                canPerformAdminActions={false} // Read-only view for dashboard
-                searchable={false} // Disable search for compact view
-                groupable={false} // Disable grouping for dashboard
-                sortable={true}
-                pagination={false} // Show all recent users
-                className="border-0" // Remove border for card integration
+                canPerformAdminActions={false}
+                className="border-0"
               />
             )}
           </CardContent>
