@@ -3,8 +3,10 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ProductTable } from "@/components/ui/product-table";
 import { AdvancedUserTable } from "@/components/ui/advanced-user-table";
-import type { UserData } from "@/lib/export-utils";
+import { UserData } from "@/lib/export-utils";
+import { RealProductTable } from "@/components/ui/real-product-table";
 import {
   Card,
   CardContent,
@@ -301,43 +303,6 @@ export default function ProductsPage() {
       </DashboardLayout>
     );
   }
-
-  // Transform product data to match UserData interface for the advanced table
-  const transformedProducts: UserData[] = (productsData || []).map((product: Product) => ({
-    id: product.id.toString(),
-    username: product.sku || `product-${product.id}`,
-    email: product.name || "Unnamed Product",
-    first_name: product.name?.split(' ')[0] || "Product",
-    last_name: product.name?.split(' ').slice(1).join(' ') || "",
-    phone: product.price ? `$${product.price}` : "No Price",
-    is_active: product.isActive,
-    role_names: [categoriesData?.find((c: any) => c.id === product.categoryId)?.name || "Uncategorized"],
-    last_login_at: product.minStockLevel ? `Stock: ${product.minStockLevel}` : "No Stock Info",
-    created_at: product.createdAt ? new Date(product.createdAt).toLocaleDateString() : "Unknown",
-    updated_at: product.updatedAt ? new Date(product.updatedAt).toLocaleDateString() : "Unknown",
-  }));
-
-  const handleProductEdit = (user: UserData) => {
-    const product = (productsData || []).find((p: Product) => p.id.toString() === user.id);
-    if (product) {
-      handleEdit(product);
-    }
-  };
-
-  const handleProductDelete = (user: UserData) => {
-    const product = (productsData || []).find((p: Product) => p.id.toString() === user.id);
-    if (product) {
-      handleDelete(product);
-    }
-  };
-
-  const handleProductView = (user: UserData) => {
-    const product = (productsData || []).find((p: Product) => p.id.toString() === user.id);
-    if (product) {
-      // Handle view action
-      console.log("View product:", product);
-    }
-  };
 
   return (
     <DashboardLayout>
@@ -737,17 +702,18 @@ export default function ProductsPage() {
         <CardHeader>
           <CardTitle>Product Catalog</CardTitle>
           <CardDescription>
-            View and manage all products in your catalog
+            Complete product catalog showing ALL database columns: SKU, Name, Barcode, Description, Price, Cost, Category, Stock Levels (Min/Max/Reorder), Dimensions (L×W×H), Weight, UOM, Lead Time, Image Status, and more. Use column settings to show/hide specific fields.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {/* Using AdvancedUserTable with transformed product data */}
-          <AdvancedUserTable
-            data={transformedProducts}
+          {/* Real Product Table showing ALL database columns with correct names */}
+          <RealProductTable
+            data={productsData || []}
+            categories={categoriesData || []}
             loading={isLoading}
-            onUserEdit={handleProductEdit}
-            onUserDelete={handleProductDelete}
-            onUserView={handleProductView}
+            onProductEdit={(product) => console.log("Edit product:", product)}
+            onProductDelete={(product) => console.log("Delete product:", product)}
+            onProductView={(product) => console.log("View product:", product)}
           />
         </CardContent>
       </Card>

@@ -119,9 +119,9 @@ export function AdvancedUserTable({
   const [filters, setFilters] = useState<ColumnFilters>({
     name: "",
     email: "",
-    roles: "",
+    roles: "all",
     phone: "",
-    status: "",
+    status: "all",
     lastLogin: "",
     created: "",
   })
@@ -588,9 +588,9 @@ export function AdvancedUserTable({
     setFilters({
       name: "",
       email: "",
-      roles: "",
+      roles: "all",
       phone: "",
-      status: "",
+      status: "all",
       lastLogin: "",
       created: "",
     })
