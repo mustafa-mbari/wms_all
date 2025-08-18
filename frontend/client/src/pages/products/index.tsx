@@ -3,9 +3,6 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ProductTable } from "@/components/ui/product-table";
-import { AdvancedUserTable } from "@/components/ui/advanced-user-table";
-import { UserData } from "@/lib/export-utils";
 import { RealProductTable } from "@/components/ui/real-product-table";
 import {
   Card,

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useRef, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -30,6 +30,8 @@ import {
   Trash2,
   MoreHorizontal,
   Eye,
+  Sun,
+  Moon,
 } from "lucide-react"
 import React from "react"
 
@@ -108,7 +110,8 @@ export function AdvancedGenericTable<T extends Record<string, any>>({
   customActions = [],
   bulkActions = [],
 }: AdvancedGenericTableProps<T>) {
-  const { theme, setTheme } = useTheme()
+  // Simple theme state (can be replaced with actual theme provider later)
+  const [theme, setTheme] = useState<"light" | "dark">("light")
   const toggleTheme = () => setTheme(theme === "dark" ? "light" : "dark")
 
   // State
