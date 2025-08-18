@@ -1,1025 +1,230 @@
 "use client"
 
-import { useState, useMemo, useRef, useCallback } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import React, { useState, useMemo, useCallback } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "./card"
+import { Button } from "./button"
+import { Input } from "./input"
+import { Badge } from "./badge"
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from "./table"
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "./dropdown-menu"
+import { Checkbox } from "./checkbox"
+import { cn } from "../../lib/utils"
 import {
-  X,
+  Search,
+  Filter,
+  Download,
+  Eye,
+  EyeOff,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  Users,
-  Search,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  ChevronDown,
-  ChevronRightIcon,
-  Moon,
-  Sun,
+  Users,
+  UserPlus,
+  Settings,
+  MoreHorizontal,
+  Edit,
+  Trash2,
+  X,
+  ChevronDown
 } from "lucide-react"
-import { ColumnSettingsDialog } from "./column-settings-dialog"
-import { ExportDropdown } from "./export-dropdown"
-import { useTableSettings } from "@/hooks/use-table-settings"
-import { useTheme } from "@/hooks/use-theme"
-import type { UserData } from "@/lib/export-utils"
-import React from "react"
 
-interface ColumnFilters {
-  name: string
-  email: string
-  roles: string
-  phone: string
-  status: string
-  lastLogin: string
-  created: string
-}
-
-type SortDirection = "asc" | "desc" | null
-type SortableColumn = "name" | "email" | "roles" | "phone" | "status" | "lastLogin" | "created"
-
-interface SortConfig {
-  column: SortableColumn | null
-  direction: SortDirection
-}
-
-interface GroupConfig {
-  column: SortableColumn | null
-}
-
-interface ColumnWidths {
-  name: number
-  email: number
-  roles: number
-  phone: number
-  status: number
-  lastLogin: number
-  created: number
-}
-
-const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
-
-const DEFAULT_COLUMN_WIDTHS: ColumnWidths = {
-  name: 200,
-  email: 250,
-  roles: 150,
-  phone: 150,
-  status: 120,
-  lastLogin: 150,
-  created: 130,
-}
-
-interface AdvancedUserTableProps {
-  data: UserData[]
-  loading?: boolean
-  onUserSelect?: (userIds: string[]) => void
-  onBulkAction?: (action: string, userIds: string[]) => void
-}
-
-export function AdvancedUserTable({ 
-  data, 
-  loading = false, 
-  onUserSelect,
-  onBulkAction 
-}: AdvancedUserTableProps) {
-  const { theme, setTheme } = useTheme()
-  const { settings, updateSettings, resetSettings, isLoaded } = useTableSettings()
-
-  const [filters, setFilters] = useState<ColumnFilters>({
-    name: "",
-    email: "",
-    roles: "",
-    phone: "",
-    status: "",
-    lastLogin: "",
-    created: "",
-  })
-
-  const [columnWidths, setColumnWidths] = useState<ColumnWidths>(DEFAULT_COLUMN_WIDTHS)
-  const [isResizing, setIsResizing] = useState<string | null>(null)
-  const [startX, setStartX] = useState(0)
-  const [startWidth, setStartWidth] = useState(0)
-  const tableRef = useRef<HTMLTableElement>(null)
-
-  const columnVisibility = settings.columnVisibility
-  const sortColumn = settings.sortColumn as SortableColumn | null
-  const sortDirection = settings.sortDirection
-  const groupColumn = settings.groupColumn as SortableColumn | null
-  const pageSize = settings.pageSize
-
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
-  const [currentPage, setCurrentPage] = useState(1)
-  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
-
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent, column: keyof ColumnWidths) => {
-      e.preventDefault()
-      setIsResizing(column)
-      setStartX(e.clientX)
-      setStartWidth(columnWidths[column])
-    },
-    [columnWidths],
-  )
-
-  const handleMouseMove = useCallback(
-    (e: MouseEvent) => {
-      if (!isResizing) return
-
-      const diff = e.clientX - startX
-      const newWidth = Math.max(80, startWidth + diff) // Minimum width of 80px
-
-      setColumnWidths((prev) => ({
-        ...prev,
-        [isResizing]: newWidth,
-      }))
-    },
-    [isResizing, startX, startWidth],
-  )
-
-  const handleMouseUp = useCallback(() => {
-    setIsResizing(null)
-  }, [])
-
-  React.useEffect(() => {
-    if (isResizing) {
-      document.addEventListener("mousemove", handleMouseMove)
-      document.addEventListener("mouseup", handleMouseUp)
-      document.body.style.cursor = "col-resize"
-      document.body.style.userSelect = "none"
-
-      return () => {
-        document.removeEventListener("mousemove", handleMouseMove)
-        document.removeEventListener("mouseup", handleMouseUp)
-        document.body.style.cursor = ""
-        document.body.style.userSelect = ""
-      }
-    }
-  }, [isResizing, handleMouseMove, handleMouseUp])
-
-  const visibleColumns = useMemo(() => {
-    return Object.entries(columnVisibility)
-      .filter(([_, visible]) => visible)
-      .map(([column]) => column as keyof typeof columnVisibility)
-  }, [columnVisibility])
-
-  const uniqueValues = useMemo(
-    () => ({
-      roles: [...new Set(data.flatMap(user => user.role_names))].sort(),
-      statuses: ["Active", "Inactive"],
-    }),
-    [data],
-  )
-
-  const filteredData = useMemo(() => {
-    return data.filter((user) => {
-      const fullName = `${user.first_name} ${user.last_name}`.toLowerCase()
-      const userRoles = user.role_names.join(", ").toLowerCase()
-      
-      return (
-        fullName.includes(filters.name.toLowerCase()) &&
-        user.email.toLowerCase().includes(filters.email.toLowerCase()) &&
-        (filters.roles === "" || filters.roles === "all" || userRoles.includes(filters.roles.toLowerCase())) &&
-        (user.phone || "").toLowerCase().includes(filters.phone.toLowerCase()) &&
-        (filters.status === "" || filters.status === "all" || 
-         (filters.status === "active" && user.is_active) || 
-         (filters.status === "inactive" && !user.is_active)) &&
-        (user.last_login_at || "").includes(filters.lastLogin) &&
-        user.created_at.includes(filters.created)
-      )
-    })
-  }, [data, filters])
-
-  const sortedData = useMemo(() => {
-    if (!sortColumn || !sortDirection) return filteredData
-
-    return [...filteredData].sort((a, b) => {
-      let aValue: any, bValue: any
-
-      switch (sortColumn) {
-        case "name":
-          aValue = `${a.first_name} ${a.last_name}`.toLowerCase()
-          bValue = `${b.first_name} ${b.last_name}`.toLowerCase()
-          break
-        case "email":
-          aValue = a.email.toLowerCase()
-          bValue = b.email.toLowerCase()
-          break
-        case "roles":
-          aValue = a.role_names.join(", ").toLowerCase()
-          bValue = b.role_names.join(", ").toLowerCase()
-          break
-        case "phone":
-          aValue = (a.phone || "").toLowerCase()
-          bValue = (b.phone || "").toLowerCase()
-          break
-        case "status":
-          aValue = a.is_active ? "active" : "inactive"
-          bValue = b.is_active ? "active" : "inactive"
-          break
-        case "lastLogin":
-          aValue = a.last_login_at ? new Date(a.last_login_at).getTime() : 0
-          bValue = b.last_login_at ? new Date(b.last_login_at).getTime() : 0
-          break
-        case "created":
-          aValue = new Date(a.created_at).getTime()
-          bValue = new Date(b.created_at).getTime()
-          break
-        default:
-          return 0
-      }
-
-      if (sortColumn === "lastLogin" || sortColumn === "created") {
-        return sortDirection === "asc" ? aValue - bValue : bValue - aValue
-      }
-
-      if (aValue < bValue) return sortDirection === "asc" ? -1 : 1
-      if (aValue > bValue) return sortDirection === "asc" ? 1 : -1
-      return 0
-    })
-  }, [filteredData, sortColumn, sortDirection])
-
-  const totalPages = Math.ceil(sortedData.length / pageSize)
-  const startIndex = (currentPage - 1) * pageSize
-  const endIndex = startIndex + pageSize
-  const paginatedData = groupColumn ? sortedData : sortedData.slice(startIndex, endIndex)
-
-  const selectedUsers = useMemo(() => {
-    return data.filter((user) => selectedRows.has(user.id))
-  }, [data, selectedRows])
-
-  const groupedData = useMemo(() => {
-    if (!groupColumn) return null
-
-    const groups = sortedData.reduce(
-      (acc, user) => {
-        let groupKey = ""
-        switch (groupColumn) {
-          case "roles":
-            groupKey = user.role_names.join(", ") || "No Role"
-            break
-          case "status":
-            groupKey = user.is_active ? "Active" : "Inactive"
-            break
-          default:
-            groupKey = String(user[groupColumn as keyof UserData] || "Unknown")
-        }
-        
-        if (!acc[groupKey]) {
-          acc[groupKey] = []
-        }
-        acc[groupKey].push(user)
-        return acc
-      },
-      {} as Record<string, UserData[]>,
-    )
-
-    return Object.entries(groups).map(([groupValue, users]) => ({
-      groupValue,
-      users,
-      count: users.length,
-    }))
-  }, [sortedData, groupColumn])
-
-  // Notify parent of selection changes
-  React.useEffect(() => {
-    if (onUserSelect) {
-      onUserSelect(Array.from(selectedRows))
-    }
-  }, [selectedRows, onUserSelect])
-
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      const currentPageIds = new Set(paginatedData.map((user) => user.id))
-      setSelectedRows(currentPageIds)
-    } else {
-      setSelectedRows(new Set())
-    }
-  }
-
-  const handleSelectRow = (userId: string, checked: boolean) => {
-    setSelectedRows((prev) => {
-      const newSet = new Set(prev)
-      if (checked) {
-        newSet.add(userId)
-      } else {
-        newSet.delete(userId)
-      }
-      return newSet
-    })
-  }
-
-  const handleBulkDelete = () => {
-    if (onBulkAction) {
-      onBulkAction("delete", Array.from(selectedRows))
-    }
-    setSelectedRows(new Set())
-  }
-
-  const handleBulkEmail = () => {
-    if (onBulkAction) {
-      onBulkAction("email", Array.from(selectedRows))
-    }
-  }
-
-  const isAllSelected = paginatedData.length > 0 && paginatedData.every((user) => selectedRows.has(user.id))
-  const isIndeterminate = paginatedData.some((user) => selectedRows.has(user.id)) && !isAllSelected
-
-  const handleSort = (column: SortableColumn) => {
-    let newDirection: SortDirection = "asc"
-
-    if (sortColumn === column) {
-      if (sortDirection === "asc") newDirection = "desc"
-      else if (sortDirection === "desc") newDirection = null
-    }
-
-    updateSettings({
-      sortColumn: newDirection ? column : null,
-      sortDirection: newDirection,
-    })
-    setCurrentPage(1)
-  }
-
-  const handleGroup = (column: SortableColumn) => {
-    const newGroupColumn = groupColumn === column ? null : column
-    updateSettings({ groupColumn: newGroupColumn })
-    setExpandedGroups(new Set())
-    setCurrentPage(1)
-  }
-
-  const handleColumnVisibilityChange = (newVisibility: typeof columnVisibility) => {
-    updateSettings({ columnVisibility: newVisibility })
-  }
-
-  const handlePageSizeChange = (newPageSize: number) => {
-    updateSettings({ pageSize: newPageSize })
-    setCurrentPage(1)
-  }
-
-  const toggleGroupExpansion = (groupValue: string) => {
-    setExpandedGroups((prev) => {
-      const newSet = new Set(prev)
-      if (newSet.has(groupValue)) {
-        newSet.delete(groupValue)
-      } else {
-        newSet.add(groupValue)
-      }
-      return newSet
-    })
-  }
-
-  const getSortIcon = (column: SortableColumn) => {
-    if (sortColumn !== column) return <ArrowUpDown className="h-4 w-4" />
-    if (sortDirection === "asc") return <ArrowUp className="h-4 w-4" />
-    if (sortDirection === "desc") return <ArrowDown className="h-4 w-4" />
-    return <ArrowUpDown className="h-4 w-4" />
-  }
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    })
-  }
-
-  const getStatusBadgeVariant = (isActive: boolean) => {
-    return isActive ? "default" : "destructive"
-  }
-
-  const renderColumnHeader = (column: SortableColumn, label: string) => (
-    <th
-      className="h-12 px-4 text-left align-middle font-medium text-muted-foreground relative border-r border-border/50"
-      style={{ width: columnWidths[column], minWidth: columnWidths[column] }}
-    >
-      <div className="flex items-center gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-auto p-0 font-medium text-muted-foreground hover:text-foreground"
-          onClick={() => handleSort(column)}
-        >
-          {label}
-          {getSortIcon(column)}
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-auto p-1 text-muted-foreground hover:text-foreground"
-          onClick={() => handleGroup(column)}
-          title={`Group by ${label}`}
-        >
-          <Users className="h-3 w-3" />
-        </Button>
-        {groupColumn === column && (
-          <Badge variant="secondary" className="text-xs">
-            Grouped
-          </Badge>
-        )}
-      </div>
-      <div
-        className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 transition-colors"
-        onMouseDown={(e) => handleMouseDown(e, column)}
-        title="Drag to resize column"
-      />
-    </th>
-  )
-
-  const columnConfig = {
-    name: {
-      key: "name" as const,
-      label: "Name",
-      render: (user: UserData) => (
-        <div className="font-medium">
-          {user.first_name} {user.last_name}
-          <div className="text-xs text-muted-foreground">@{user.username}</div>
-        </div>
-      ),
-    },
-    email: {
-      key: "email" as const,
-      label: "Email",
-      render: (user: UserData) => (
-        <div>
-          <span className="text-muted-foreground">{user.email}</span>
-          {user.email_verified && (
-            <Badge variant="outline" className="ml-2 text-xs">
-              Verified
-            </Badge>
-          )}
-        </div>
-      ),
-    },
-    roles: {
-      key: "roles" as const,
-      label: "Roles",
-      render: (user: UserData) => (
-        <div className="flex flex-wrap gap-1">
-          {user.role_names.length > 0 ? (
-            user.role_names.map((role, index) => (
-              <Badge key={index} variant="outline" className="text-xs">
-                {role}
-              </Badge>
-            ))
-          ) : (
-            <span className="text-muted-foreground text-xs">No roles</span>
-          )}
-        </div>
-      ),
-    },
-    phone: {
-      key: "phone" as const,
-      label: "Phone",
-      render: (user: UserData) => (
-        <span className="text-muted-foreground">{user.phone || "N/A"}</span>
-      ),
-    },
-    status: {
-      key: "status" as const,
-      label: "Status",
-      render: (user: UserData) => (
-        <Badge variant={getStatusBadgeVariant(user.is_active)}>
-          {user.is_active ? "Active" : "Inactive"}
-        </Badge>
-      ),
-    },
-    lastLogin: {
-      key: "lastLogin" as const,
-      label: "Last Login",
-      render: (user: UserData) => (
-        <span className="text-muted-foreground">
-          {user.last_login_at ? formatDate(user.last_login_at) : "Never"}
-        </span>
-      ),
-    },
-    created: {
-      key: "created" as const,
-      label: "Created",
-      render: (user: UserData) => (
-        <span className="text-muted-foreground">{formatDate(user.created_at)}</span>
-      ),
-    },
-  }
-
-  const clearAllFilters = () => {
-    setFilters({
-      name: "",
-      email: "",
-      roles: "",
-      phone: "",
-      status: "",
-      lastLogin: "",
-      created: "",
-    })
-    updateSettings({ sortColumn: null, sortDirection: null })
-    updateSettings({ groupColumn: null })
-    setExpandedGroups(new Set())
-    setSelectedRows(new Set())
-    setCurrentPage(1)
-  }
-
-  const handleResetAllSettings = () => {
-    resetSettings()
-    clearAllFilters()
-  }
-
-  const hasActiveFilters =
-    Object.values(filters).some((filter) => filter !== "" && filter !== "all") ||
-    sortColumn !== null ||
-    groupColumn !== null
-
-  const MobileUserCard = ({
-    user,
-    isSelected,
-    onSelect,
-  }: { user: UserData; isSelected: boolean; onSelect: (checked: boolean) => void }) => (
-    <div className="border rounded-lg p-4 space-y-3 bg-card">
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <Checkbox checked={isSelected} onCheckedChange={onSelect} aria-label={`Select ${user.first_name} ${user.last_name}`} />
-          <div>
-            <div className="font-medium">{user.first_name} {user.last_name}</div>
-            <div className="text-sm text-muted-foreground">@{user.username}</div>
-            <div className="text-sm text-muted-foreground">{user.email}</div>
-          </div>
-        </div>
-        <Badge variant={getStatusBadgeVariant(user.is_active)}>
-          {user.is_active ? "Active" : "Inactive"}
-        </Badge>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 text-sm">
-        <div>
-          <div className="text-muted-foreground">Roles</div>
-          <div className="mt-1 flex flex-wrap gap-1">
-            {user.role_names.length > 0 ? (
-              user.role_names.map((role, index) => (
-                <Badge key={index} variant="outline" className="text-xs">
-                  {role}
-                </Badge>
-              ))
-            ) : (
-              <span className="text-muted-foreground text-xs">No roles</span>
-            )}
-          </div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">Phone</div>
-          <div className="mt-1">{user.phone || "N/A"}</div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">Last Login</div>
-          <div className="mt-1">{user.last_login_at ? formatDate(user.last_login_at) : "Never"}</div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">Created</div>
-          <div className="mt-1">{formatDate(user.created_at)}</div>
-        </div>
-      </div>
-
-      {user.email_verified && (
-        <div className="text-sm">
-          <Badge variant="outline" className="text-xs">
-            Email Verified
-          </Badge>
-        </div>
-      )}
-    </div>
-  )
-
-  const updateFilter = (column: keyof ColumnFilters, value: string) => {
-    setFilters((prev) => ({
-      ...prev,
-      [column]: value,
-    }))
-  }
-
-  if (!isLoaded) {
-    return (
-      <Card className="w-full">
-        <CardContent className="p-8">
-          <div className="flex items-center justify-center">
-            <div className="text-muted-foreground">Loading table settings...</div>
-          </div>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  if (loading) {
-    return (
-      <Card className="w-full">
-        <CardContent className="p-8">
-          <div className="flex items-center justify-center">
-            <div className="text-muted-foreground">Loading users...</div>
-          </div>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  return (
-    <Card className="w-full">
-      <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between space-y-2 sm:space-y-0 pb-4">
-        <CardTitle className="text-2xl font-bold">User Directory</CardTitle>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
-            {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-          </Button>
-          <ColumnSettingsDialog
-            columnVisibility={columnVisibility}
-            onColumnVisibilityChange={handleColumnVisibilityChange}
-          />
-          <ExportDropdown 
-            data={selectedRows.size > 0 ? selectedUsers : sortedData} 
-            selectedData={selectedUsers}
-            filename="users" 
-          />
-          {hasActiveFilters && (
-            <Button variant="outline" size="sm" onClick={clearAllFilters}>
-              <X className="h-4 w-4 mr-2" />
-              Clear Filters
-            </Button>
-          )}
-          <Button variant="outline" size="sm" onClick={handleResetAllSettings}>
-            Reset All
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setColumnWidths(DEFAULT_COLUMN_WIDTHS)}
-            title="Reset column widths"
-          >
-            Reset Widths
-          </Button>
-        </div>
-      </CardHeader>
-
-      <CardContent className="p-0">
-        {/* Bulk Actions Bar */}
-        {selectedRows.size > 0 && (
-          <div className="bg-muted/50 border-b px-4 py-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">
-                {selectedRows.size} row{selectedRows.size !== 1 ? "s" : ""} selected
-              </span>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={handleBulkEmail}>
-                  Email Selected
-                </Button>
-                <ExportDropdown 
-                  data={selectedUsers} 
-                  filename="selected-users" 
-                  variant="outline" 
-                  size="sm" 
-                />
-                <Button variant="destructive" size="sm" onClick={handleBulkDelete}>
-                  Delete Selected
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Desktop Table View */}
-        <div className="hidden md:block">
-          <div className="overflow-x-auto">
-            <table ref={tableRef} className="w-full table-fixed">
-              <thead>
-                <tr className="border-b">
-                  <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground w-12 border-r border-border/50">
-                    <Checkbox
-                      checked={isAllSelected}
-                      onCheckedChange={handleSelectAll}
-                      aria-label="Select all rows"
-                      {...(isIndeterminate && { "data-state": "indeterminate" })}
-                    />
-                  </th>
-                  {visibleColumns.map((column) => {
-                    const config = columnConfig[column]
-                    return config ? renderColumnHeader(config.key, config.label) : null
-                  })}
-                </tr>
-                {/* Filter Row */}
-                <tr className="border-b bg-muted/20">
-                  <td className="h-12 px-4 border-r border-border/50"></td>
-                  {visibleColumns.map((column) => (
-                    <td
-                      key={column}
-                      className="h-12 px-4 border-r border-border/50"
-                      style={{ width: columnWidths[column] }}
-                    >
-                      {column === "roles" || column === "status" ? (
-                        <Select value={filters[column]} onValueChange={(value) => updateFilter(column, value)}>
-                          <SelectTrigger className="h-8 w-full">
-                            <SelectValue placeholder={`Filter ${column}`} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">All {column}</SelectItem>
-                            {(column === "roles"
-                              ? uniqueValues.roles
-                              : uniqueValues.statuses
-                            ).map((value) => (
-                              <SelectItem key={value} value={value.toLowerCase()}>
-                                {value}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <div className="relative">
-                          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground" />
-                          <Input
-                            placeholder={`Search ${column}...`}
-                            value={filters[column]}
-                            onChange={(e) => updateFilter(column, e.target.value)}
-                            className="h-8 pl-7"
-                          />
-                        </div>
-                      )}
-                    </td>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {groupedData
-                  ? groupedData.map(({ groupValue, users, count }) => (
-                      <React.Fragment key={groupValue}>
-                        <tr className="border-b bg-muted/10">
-                          <td colSpan={visibleColumns.length + 1} className="h-12 px-4">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-auto p-0 font-medium"
-                              onClick={() => toggleGroupExpansion(groupValue)}
-                            >
-                              {expandedGroups.has(groupValue) ? (
-                                <ChevronDown className="h-4 w-4 mr-2" />
-                              ) : (
-                                <ChevronRightIcon className="h-4 w-4 mr-2" />
-                              )}
-                              {groupValue} ({count} user{count !== 1 ? "s" : ""})
-                            </Button>
-                          </td>
-                        </tr>
-                        {expandedGroups.has(groupValue) &&
-                          users.map((user) => (
-                            <tr key={user.id} className="border-b hover:bg-muted/50">
-                              <td className="h-12 px-4 border-r border-border/50">
-                                <Checkbox
-                                  checked={selectedRows.has(user.id)}
-                                  onCheckedChange={(checked) => handleSelectRow(user.id, checked as boolean)}
-                                  aria-label={`Select ${user.first_name} ${user.last_name}`}
-                                />
-                              </td>
-                              {visibleColumns.map((column) => {
-                                const config = columnConfig[column]
-                                return config ? (
-                                  <td
-                                    key={column}
-                                    className="h-12 px-4 border-r border-border/50 overflow-hidden"
-                                    style={{ width: columnWidths[column] }}
-                                  >
-                                    <div className="truncate">{config.render(user)}</div>
-                                  </td>
-                                ) : null
-                              })}
-                            </tr>
-                          ))}
-                      </React.Fragment>
-                    ))
-                  : paginatedData.map((user) => (
-                      <tr key={user.id} className="border-b hover:bg-muted/50">
-                        <td className="h-12 px-4 border-r border-border/50">
-                          <Checkbox
-                            checked={selectedRows.has(user.id)}
-                            onCheckedChange={(checked) => handleSelectRow(user.id, checked as boolean)}
-                            aria-label={`Select ${user.first_name} ${user.last_name}`}
-                          />
-                        </td>
-                        {visibleColumns.map((column) => {
-                          const config = columnConfig[column]
-                          return config ? (
-                            <td
-                              key={column}
-                              className="h-12 px-4 border-r border-border/50 overflow-hidden"
-                              style={{ width: columnWidths[column] }}
-                            >
-                              <div className="truncate">{config.render(user)}</div>
-                            </td>
-                          ) : null
-                        })}
-                      </tr>
-                    ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Mobile Card View */}
-        <div className="md:hidden p-4 space-y-4">
-          {/* Mobile Filters */}
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 gap-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search users..."
-                  value={filters.name}
-                  onChange={(e) => updateFilter("name", e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Select value={filters.roles} onValueChange={(value) => updateFilter("roles", value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Roles" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Roles</SelectItem>
-                    {uniqueValues.roles.map((role) => (
-                      <SelectItem key={role} value={role.toLowerCase()}>
-                        {role}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={filters.status} onValueChange={(value) => updateFilter("status", value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    {uniqueValues.statuses.map((status) => (
-                      <SelectItem key={status} value={status.toLowerCase()}>
-                        {status}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-
-          {/* Mobile Select All */}
-          <div className="flex items-center justify-between py-2 border-b">
-            <div className="flex items-center gap-3">
-              <Checkbox
-                checked={isAllSelected}
-                onCheckedChange={handleSelectAll}
-                aria-label="Select all visible rows"
-                {...(isIndeterminate && { "data-state": "indeterminate" })}
-              />
-              <span className="text-sm font-medium">Select All ({paginatedData.length} users)</span>
-            </div>
-          </div>
-
-          {/* Mobile User Cards */}
-          {groupedData ? (
-            <div className="space-y-4">
-              {groupedData.map(({ groupValue, users, count }) => (
-                <div key={groupValue} className="space-y-3">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-auto p-2 font-medium w-full justify-start"
-                    onClick={() => toggleGroupExpansion(groupValue)}
-                  >
-                    {expandedGroups.has(groupValue) ? (
-                      <ChevronDown className="h-4 w-4 mr-2" />
-                    ) : (
-                      <ChevronRightIcon className="h-4 w-4 mr-2" />
-                    )}
-                    {groupValue} ({count} user{count !== 1 ? "s" : ""})
-                  </Button>
-                  {expandedGroups.has(groupValue) && (
-                    <div className="space-y-3 ml-4">
-                      {users.map((user) => (
-                        <MobileUserCard
-                          key={user.id}
-                          user={user}
-                          isSelected={selectedRows.has(user.id)}
-                          onSelect={(checked) => handleSelectRow(user.id, checked)}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {paginatedData.map((user) => (
-                <MobileUserCard
-                  key={user.id}
-                  user={user}
-                  isSelected={selectedRows.has(user.id)}
-                  onSelect={(checked) => handleSelectRow(user.id, checked)}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Pagination */}
-        {!groupColumn && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>Rows per page:</span>
-              <Select value={pageSize.toString()} onValueChange={(value) => handlePageSizeChange(Number(value))}>
-                <SelectTrigger className="w-20">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PAGE_SIZE_OPTIONS.map((size) => (
-                    <SelectItem key={size} value={size.toString()}>
-                      {size}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>
-                Showing {startIndex + 1} to {Math.min(endIndex, sortedData.length)} of {sortedData.length} results
-              </span>
-            </div>
-
-            <div className="flex items-center gap-1">
-              <Button variant="outline" size="sm" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}>
-                <ChevronsLeft className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(currentPage - 1)}
-                disabled={currentPage === 1}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <div className="flex items-center gap-1">
-                <span className="text-sm font-medium px-3 py-1">
-                  Page {currentPage} of {totalPages}
-                </span>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(currentPage + 1)}
-                disabled={currentPage === totalPages}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(totalPages)}
-                disabled={currentPage === totalPages}
-              >
-                <ChevronsRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
+// Types
+export interface ColumnDef {
+  id: string
   header: string
   accessorKey?: string
-  cell?: (value: any, row: T) => React.ReactNode
+  cell?: (value: any, row: any) => React.ReactNode
   sortable?: boolean
   filterable?: boolean
-  width?: string | number
+  width?: string
 }
 
-interface GroupedData<T> {
-  groupKey: string
-  groupValue: any
-  data: T[]
-  isGroup: true
+export interface User {
+  id: number
+  name: string
+  email: string
+  role_names: string[]
+  status: string
+  created_at: string
+  last_login: string | null
+  permissions?: string[]
 }
 
-interface UngroupedData<T> {
-  data: T[]
-  isGroup: false
-}
-
-export interface AdvancedTableProps<T = any> {
-  data: T[]
-  columns: ColumnDef<T>[]
+export interface AdvancedUserTableProps {
+  data: User[]
+  onAddUser?: () => void
+  onEditUser?: (user: User) => void
+  onDeleteUser?: (user: User) => void
+  onUserClick?: (user: User) => void
   className?: string
-  onRowClick?: (row: T) => void
-  searchable?: boolean
-  groupable?: boolean
-  sortable?: boolean
-  pagination?: boolean
-  pageSize?: number
+}
+
+type SortDirection = "asc" | "desc"
+
+// Custom hook for filtering logic
+const useTableFilters = (data: User[], columns: ColumnDef[]) => {
+  const [searchValue, setSearchValue] = useState("")
+  const [columnFilters, setColumnFilters] = useState<Record<string, string>>({})
+
+  const filteredData = useMemo(() => {
+    let filtered = [...data]
+
+    // Apply search filter
+    if (searchValue.trim()) {
+      filtered = filtered.filter(row =>
+        columns.some(column => {
+          if (!column.accessorKey) return false
+          const value = row[column.accessorKey as keyof User]
+          return String(value || "").toLowerCase().includes(searchValue.toLowerCase())
+        })
+      )
+    }
+
+    // Apply column filters
+    Object.entries(columnFilters).forEach(([columnId, filterValue]) => {
+      if (filterValue.trim()) {
+        const column = columns.find(col => col.id === columnId)
+        if (column?.accessorKey) {
+          filtered = filtered.filter(row => {
+            const value = row[column.accessorKey as keyof User]
+            return String(value || "").toLowerCase().includes(filterValue.toLowerCase())
+          })
+        }
+      }
+    })
+
+    return filtered
+  }, [data, searchValue, columnFilters, columns])
+
+  const setColumnFilter = useCallback((columnId: string, value: string) => {
+    setColumnFilters(prev => ({
+      ...prev,
+      [columnId]: value
+    }))
+  }, [])
+
+  const clearColumnFilter = useCallback((columnId: string) => {
+    setColumnFilters(prev => {
+      const newFilters = { ...prev }
+      delete newFilters[columnId]
+      return newFilters
+    })
+  }, [])
+
+  return {
+    searchValue,
+    setSearchValue,
+    columnFilters,
+    setColumnFilter,
+    clearColumnFilter,
+    filteredData
+  }
+}
+
+// Custom hook for sorting logic
+const useTableSorting = (data: User[], columns: ColumnDef[]) => {
+  const [sortBy, setSortBy] = useState<string | null>(null)
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc")
+
+  const sortedData = useMemo(() => {
+    if (!sortBy) return data
+
+    const column = columns.find(col => col.id === sortBy)
+    if (!column?.accessorKey) return data
+
+    return [...data].sort((a, b) => {
+      const aValue = a[column.accessorKey as keyof User]
+      const bValue = b[column.accessorKey as keyof User]
+
+      // Handle null/undefined
+      if (aValue == null && bValue == null) return 0
+      if (aValue == null) return 1
+      if (bValue == null) return -1
+
+      // Handle arrays (like role_names)
+      if (Array.isArray(aValue) && Array.isArray(bValue)) {
+        const aStr = aValue.join(", ").toLowerCase()
+        const bStr = bValue.join(", ").toLowerCase()
+        const result = aStr.localeCompare(bStr)
+        return sortDirection === "asc" ? result : -result
+      }
+
+      // Handle strings and other types
+      const aStr = String(aValue).toLowerCase()
+      const bStr = String(bValue).toLowerCase()
+      const result = aStr.localeCompare(bStr)
+      return sortDirection === "asc" ? result : -result
+    })
+  }, [data, sortBy, sortDirection, columns])
+
+  const handleSort = useCallback((columnId: string) => {
+    if (sortBy === columnId) {
+      setSortDirection(prev => prev === "asc" ? "desc" : "asc")
+    } else {
+      setSortBy(columnId)
+      setSortDirection("asc")
+    }
+  }, [sortBy])
+
+  return {
+    sortBy,
+    sortDirection,
+    sortedData,
+    handleSort
+  }
+}
+
+// Custom hook for pagination
+const useTablePagination = (data: User[], initialPageSize = 10) => {
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(initialPageSize)
+
+  const paginatedData = useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    const end = start + pageSize
+    return data.slice(start, end)
+  }, [data, currentPage, pageSize])
+
+  const totalPages = Math.ceil(data.length / pageSize)
+
+  const goToPage = useCallback((page: number) => {
+    setCurrentPage(Math.max(1, Math.min(page, totalPages)))
+  }, [totalPages])
+
+  const goToFirstPage = useCallback(() => goToPage(1), [goToPage])
+  const goToLastPage = useCallback(() => goToPage(totalPages), [goToPage, totalPages])
+  const goToPreviousPage = useCallback(() => goToPage(currentPage - 1), [goToPage, currentPage])
+  const goToNextPage = useCallback(() => goToPage(currentPage + 1), [goToPage, currentPage])
+
+  return {
+    currentPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    paginatedData,
+    goToPage,
+    goToFirstPage,
+    goToLastPage,
+    goToPreviousPage,
+    goToNextPage
+  }
 }
 
 // Column filter component
@@ -1037,13 +242,13 @@ const ColumnFilter: React.FC<{
           placeholder={`Filter ${column.header.toLowerCase()}...`}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="h-8 pl-7 pr-8 text-xs"
+          className="h-8 pl-7 pr-8"
         />
         {value && (
           <Button
             variant="ghost"
-            size="icon"
-            className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6"
+            size="sm"
+            className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
             onClick={onClear}
           >
             <X className="h-3 w-3" />
@@ -1054,477 +259,418 @@ const ColumnFilter: React.FC<{
   )
 }
 
-// Group header component
-const GroupHeader: React.FC<{
-  groupKey: string
-  groupValue: any
-  count: number
-  isExpanded: boolean
-  onToggle: () => void
-}> = ({ groupKey, groupValue, count, isExpanded, onToggle }) => {
-  return (
-    <TableRow className="bg-muted/30 hover:bg-muted/50 border-b-2 border-muted">
-      <TableCell colSpan={100} className="font-medium">
-        <div className="flex items-center gap-2 py-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            onClick={onToggle}
-          >
-            {isExpanded ? (
-              <ChevronDown className="h-4 w-4" />
-            ) : (
-              <ChevronRight className="h-4 w-4" />
-            )}
-          </Button>
-          <Users className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm">
-            <strong>{groupKey}:</strong> {groupValue || "(Empty)"}
-          </span>
-          <span className="ml-auto text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full">
-            {count} {count === 1 ? "item" : "items"}
-          </span>
-        </div>
-      </TableCell>
-    </TableRow>
-  )
-}
-
-// Column settings dialog component
-const ColumnSettings: React.FC<{
-  columns: ColumnDef[]
-  visibleColumns: Set<string>
-  onToggleColumn: (columnId: string) => void
-}> = ({ columns, visibleColumns, onToggleColumn }) => {
-  return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
-          <Settings className="h-4 w-4" />
-          Table Columns Settings
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Table Columns Settings</DialogTitle>
-          <DialogDescription>
-            Choose which columns to display in the table.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 max-h-80 overflow-y-auto">
-          {columns.map((column) => (
-            <div key={column.id} className="flex items-center space-x-3">
-              <Checkbox
-                id={column.id}
-                checked={visibleColumns.has(column.id)}
-                onCheckedChange={() => onToggleColumn(column.id)}
-              />
-              <label
-                htmlFor={column.id}
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2"
-              >
-                {visibleColumns.has(column.id) ? (
-                  <Eye className="h-4 w-4 text-green-600" />
-                ) : (
-                  <EyeOff className="h-4 w-4 text-muted-foreground" />
-                )}
-                {column.header}
-              </label>
-            </div>
+// Main component
+export function AdvancedUserTable({
+  data,
+  onAddUser,
+  onEditUser,
+  onDeleteUser,
+  onUserClick,
+  className
+}: AdvancedUserTableProps) {
+  // Define columns
+  const columns: ColumnDef[] = [
+    {
+      id: "name",
+      header: "Name",
+      accessorKey: "name",
+      cell: (value, row) => (
+        <div className="font-medium">{value}</div>
+      )
+    },
+    {
+      id: "email",
+      header: "Email",
+      accessorKey: "email",
+      cell: (value) => (
+        <div className="text-muted-foreground">{value}</div>
+      )
+    },
+    {
+      id: "roles",
+      header: "Roles",
+      accessorKey: "role_names",
+      cell: (value: string[]) => (
+        <div className="flex flex-wrap gap-1">
+          {Array.from(new Set(value || [])).map((role, index) => (
+            <Badge key={index} variant="secondary" className="text-xs">
+              {role}
+            </Badge>
           ))}
         </div>
-      </DialogContent>
-    </Dialog>
+      ),
+      sortable: true
+    },
+    {
+      id: "status",
+      header: "Status",
+      accessorKey: "status",
+      cell: (value) => (
+        <Badge 
+          variant={value === "active" ? "default" : "secondary"}
+          className={cn(
+            "text-xs",
+            value === "active" && "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+          )}
+        >
+          {value}
+        </Badge>
+      )
+    },
+    {
+      id: "created_at",
+      header: "Created",
+      accessorKey: "created_at",
+      cell: (value) => (
+        <div className="text-sm text-muted-foreground">
+          {new Date(value).toLocaleDateString()}
+        </div>
+      )
+    },
+    {
+      id: "last_login",
+      header: "Last Login",
+      accessorKey: "last_login",
+      cell: (value) => (
+        <div className="text-sm text-muted-foreground">
+          {value ? new Date(value).toLocaleDateString() : "Never"}
+        </div>
+      )
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: (_, row) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="h-8 w-8 p-0">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => onEditUser?.(row)}>
+              <Edit className="mr-2 h-4 w-4" />
+              Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              onClick={() => onDeleteUser?.(row)}
+              className="text-destructive"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+      sortable: false,
+      filterable: false
+    }
+  ]
+
+  // Column visibility
+  const [hiddenColumns, setHiddenColumns] = useState<string[]>([])
+  const visibleColumns = useMemo(() => 
+    columns.filter(col => !hiddenColumns.includes(col.id)),
+    [hiddenColumns]
   )
-}
 
-// Main AdvancedTable component
-export const AdvancedTable = <T extends Record<string, any>>({
-  data,
-  columns,
-  className,
-  onRowClick,
-  searchable = true,
-  groupable = true,
-  sortable = true,
-  pagination = false,
-  pageSize = 10,
-}: AdvancedTableProps<T>) => {
-  // State management
-  const [columnFilters, setColumnFilters] = useState<Record<string, string>>({})
-  const [groupBy, setGroupBy] = useState<string | null>(null)
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
-  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
-    new Set(columns.map((col) => col.id))
-  )
-  const [currentPage, setCurrentPage] = useState(1)
-  const [sortBy, setSortBy] = useState<string | null>(null)
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
+  // Use custom hooks
+  const {
+    searchValue,
+    setSearchValue,
+    columnFilters,
+    setColumnFilter,
+    clearColumnFilter,
+    filteredData
+  } = useTableFilters(data, columns)
 
-  // Helper functions
-  const getNestedValue = (obj: any, path: string): any => {
-    return path.split('.').reduce((current, key) => current?.[key], obj)
-  }
+  const {
+    sortBy,
+    sortDirection,
+    sortedData,
+    handleSort
+  } = useTableSorting(filteredData, columns)
 
-  const handleColumnFilter = (columnId: string, value: string) => {
-    setColumnFilters((prev) => ({
-      ...prev,
-      [columnId]: value,
-    }))
-  }
+  const {
+    currentPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    paginatedData,
+    goToFirstPage,
+    goToLastPage,
+    goToPreviousPage,
+    goToNextPage
+  } = useTablePagination(sortedData, 10)
 
-  const clearColumnFilter = (columnId: string) => {
-    setColumnFilters((prev) => {
-      const newFilters = { ...prev }
-      delete newFilters[columnId]
-      return newFilters
-    })
-  }
-
-  const handleGroupBy = (columnId: string) => {
-    setGroupBy(groupBy === columnId ? null : columnId)
-    setExpandedGroups(new Set())
-  }
-
-  const handleSort = (columnId: string) => {
-    if (sortBy === columnId) {
-      // Toggle sort order if same column
-      setSortOrder(sortOrder === "asc" ? "desc" : "asc")
-    } else {
-      // Set new sort column
-      setSortBy(columnId)
-      setSortOrder("asc")
+  // Statistics
+  const stats = useMemo(() => {
+    const activeUsers = data.filter(user => user.status === "active").length
+    const inactiveUsers = data.length - activeUsers
+    const roles = Array.from(new Set(data.flatMap(user => user.role_names)))
+    
+    return {
+      total: data.length,
+      active: activeUsers,
+      inactive: inactiveUsers,
+      roles: roles.sort()
     }
-  }
+  }, [data])
 
-  const toggleGroup = (groupKey: string) => {
-    setExpandedGroups((prev) => {
-      const newSet = new Set(prev)
-      if (newSet.has(groupKey)) {
-        newSet.delete(groupKey)
-      } else {
-        newSet.add(groupKey)
-      }
-      return newSet
-    })
-  }
-
-  const toggleColumnVisibility = (columnId: string) => {
-    setVisibleColumns((prev) => {
-      const newSet = new Set(prev)
-      if (newSet.has(columnId)) {
-        newSet.delete(columnId)
-      } else {
-        newSet.add(columnId)
-      }
-      return newSet
-    })
-  }
-
-  // Filter visible columns
-  const filteredColumns = columns.filter((col) => visibleColumns.has(col.id))
-
-  // Process data with filters, sorting, and grouping
-  const processedData = useMemo((): (GroupedData<T> | UngroupedData<T>)[] => {
-    let filtered = data
-
-    // Apply column filters
-    Object.entries(columnFilters).forEach(([columnId, filterValue]) => {
-      if (filterValue) {
-        const column = columns.find((col) => col.id === columnId)
-        if (column?.accessorKey) {
-          filtered = filtered.filter((row) => {
-            const value = getNestedValue(row, column.accessorKey!)
-            return String(value || "")
-              .toLowerCase()
-              .includes(filterValue.toLowerCase())
-          })
-        }
-      }
-    })
-
-    // Apply sorting
-    if (sortBy) {
-      const sortColumn = columns.find((col) => col.id === sortBy)
-      if (sortColumn?.accessorKey) {
-        filtered = [...filtered].sort((a, b) => {
-          const aValue = getNestedValue(a, sortColumn.accessorKey!)
-          const bValue = getNestedValue(b, sortColumn.accessorKey!)
-          
-          // Handle null/undefined values
-          if (aValue == null && bValue == null) return 0
-          if (aValue == null) return sortOrder === "asc" ? 1 : -1
-          if (bValue == null) return sortOrder === "asc" ? -1 : 1
-          
-          // Convert to strings for comparison
-          const aStr = String(aValue).toLowerCase()
-          const bStr = String(bValue).toLowerCase()
-          
-          if (aStr < bStr) return sortOrder === "asc" ? -1 : 1
-          if (aStr > bStr) return sortOrder === "asc" ? 1 : -1
-          return 0
-        })
-      }
-    }
-
-    // Group data if groupBy is set
-    if (groupBy) {
-      const groupColumn = columns.find((col) => col.id === groupBy)
-      if (groupColumn?.accessorKey) {
-        const groups: Record<string, T[]> = {}
-        
-        filtered.forEach((row) => {
-          const groupValue = getNestedValue(row, groupColumn.accessorKey!)
-          const groupKey = String(groupValue || "(Empty)")
-          if (!groups[groupKey]) {
-            groups[groupKey] = []
-          }
-          groups[groupKey].push(row)
-        })
-
-        return Object.entries(groups).map(([groupKey, groupData]): GroupedData<T> => ({
-          groupKey,
-          groupValue: groupKey,
-          data: groupData,
-          isGroup: true,
-        }))
-      }
-    }
-
-    return [{ data: filtered, isGroup: false } as UngroupedData<T>]
-  }, [data, columnFilters, groupBy, columns, sortBy, sortOrder])
-
-  // Pagination logic
-  const paginatedData = useMemo(() => {
-    if (!pagination) return processedData
-
-    const startIndex = (currentPage - 1) * pageSize
-    const endIndex = startIndex + pageSize
-
-    if (groupBy) {
-      return processedData.slice(startIndex, endIndex)
-    } else {
-      const flatData = processedData[0]?.data || []
-      return [{ data: flatData.slice(startIndex, endIndex), isGroup: false }]
-    }
-  }, [processedData, currentPage, pageSize, pagination, groupBy])
-
-  const totalPages = Math.ceil(
-    (groupBy ? processedData.length : (processedData[0]?.data?.length || 0)) / pageSize
-  )
+  const toggleColumnVisibility = useCallback((columnId: string) => {
+    setHiddenColumns(prev =>
+      prev.includes(columnId)
+        ? prev.filter(id => id !== columnId)
+        : [...prev, columnId]
+    )
+  }, [])
 
   return (
-    <div className="space-y-4">
-      {/* Table controls */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <ColumnSettings
-            columns={columns}
-            visibleColumns={visibleColumns}
-            onToggleColumn={toggleColumnVisibility}
+    <div className={cn("w-full space-y-6", className)}>
+      {/* Header Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="text-2xl font-bold px-6 pb-6">{stats.total}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Active Users</CardTitle>
+            <div className="h-2 w-2 bg-green-500 rounded-full" />
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="text-2xl font-bold px-6 pb-6">{stats.active}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Inactive Users</CardTitle>
+            <div className="h-2 w-2 bg-gray-500 rounded-full" />
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="text-2xl font-bold px-6 pb-6">{stats.inactive}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Roles</CardTitle>
+            <Badge variant="secondary">{stats.roles.length}</Badge>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="flex flex-wrap gap-1 px-6 pb-6">
+              {stats.roles.slice(0, 3).map((role, index) => (
+                <Badge key={index} variant="outline" className="text-xs">
+                  {role}
+                </Badge>
+              ))}
+              {stats.roles.length > 3 && (
+                <Badge variant="outline" className="text-xs">
+                  +{stats.roles.length - 3}
+                </Badge>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Controls */}
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search users..."
+            value={searchValue}
+            onChange={(e) => setSearchValue(e.target.value)}
+            className="pl-8 min-w-[300px]"
           />
-          
-          {groupable && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2">
-                  <Filter className="h-4 w-4" />
-                  {groupBy ? `Grouped by ${columns.find(c => c.id === groupBy)?.header}` : "Group By"}
-                  <ChevronDown className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuItem onClick={() => setGroupBy(null)}>
-                  No Grouping
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                {columns.map((column) => (
-                  <DropdownMenuItem
-                    key={column.id}
-                    onClick={() => handleGroupBy(column.id)}
-                    className={groupBy === column.id ? "bg-accent" : ""}
-                  >
-                    {column.header}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
         </div>
 
-        {pagination && (
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-              disabled={currentPage === 1}
-            >
-              Previous
+        <div className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Settings className="h-4 w-4" />
+                Columns
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              {columns.map((column) => (
+                <DropdownMenuItem key={column.id} asChild>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id={column.id}
+                      checked={!hiddenColumns.includes(column.id)}
+                      onCheckedChange={() => toggleColumnVisibility(column.id)}
+                    />
+                    <label htmlFor={column.id} className="text-sm font-medium">
+                      {column.header}
+                    </label>
+                  </div>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          
+          <Button variant="outline" size="sm">
+            <Download className="h-4 w-4" />
+            Export
+          </Button>
+
+          {onAddUser && (
+            <Button onClick={onAddUser} className="gap-2">
+              <UserPlus className="h-4 w-4" />
+              Add User
             </Button>
-            <span className="text-sm text-muted-foreground">
-              Page {currentPage} of {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-              disabled={currentPage === totalPages}
-            >
-              Next
-            </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Table */}
-      <div className={cn(
-        "rounded-lg border shadow-sm bg-background",
-        className
-      )}>
+      <div className="rounded-md border">
         <Table>
           <TableHeader>
-            <TableRow className="border-b">
-              {filteredColumns.map((column) => (
-                <TableHead
-                  key={column.id}
-                  style={{ width: column.width }}
-                  className="px-4 py-3"
-                >
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold">{column.header}</span>
-                      {column.sortable !== false && column.accessorKey && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => handleSort(column.id)}
-                          title={`Sort by ${column.header}`}
-                        >
-                          {sortBy === column.id ? (
-                            sortOrder === "asc" ? (
-                              <ArrowUp className="h-3 w-3 text-primary" />
-                            ) : (
-                              <ArrowDown className="h-3 w-3 text-primary" />
-                            )
+            <TableRow>
+              {visibleColumns.map((column) => (
+                <TableHead key={column.id} className="h-12">
+                  <div className="flex items-center gap-2">
+                    <span>{column.header}</span>
+                    {column.sortable !== false && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-auto p-0"
+                        onClick={() => handleSort(column.id)}
+                      >
+                        {sortBy === column.id ? (
+                          sortDirection === "asc" ? (
+                            <ArrowUp className="h-4 w-4" />
                           ) : (
-                            <ArrowUpDown className="h-3 w-3 text-muted-foreground" />
-                          )}
-                        </Button>
-                      )}
-                      {groupable && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => handleGroupBy(column.id)}
-                          title={`Group by ${column.header}`}
-                        >
-                          <Users className={cn(
-                            "h-3 w-3",
-                            groupBy === column.id ? "text-primary" : "text-muted-foreground"
-                          )} />
-                        </Button>
-                      )}
-                    </div>
-                    {searchable && column.filterable !== false && (
-                      <ColumnFilter
-                        column={column}
-                        value={columnFilters[column.id] || ""}
-                        onChange={(value) => handleColumnFilter(column.id, value)}
-                        onClear={() => clearColumnFilter(column.id)}
-                      />
+                            <ArrowDown className="h-4 w-4" />
+                          )
+                        ) : (
+                          <ArrowUpDown className="h-4 w-4" />
+                        )}
+                      </Button>
                     )}
                   </div>
                 </TableHead>
               ))}
             </TableRow>
+            
+            {/* Filter Row */}
+            <TableRow className="border-b bg-muted/20">
+              {visibleColumns.map((column) => (
+                <TableHead key={`filter-${column.id}`} className="h-12">
+                  {column.filterable !== false && (
+                    <ColumnFilter
+                      column={column}
+                      value={columnFilters[column.id] || ""}
+                      onChange={(value) => setColumnFilter(column.id, value)}
+                      onClear={() => clearColumnFilter(column.id)}
+                    />
+                  )}
+                </TableHead>
+              ))}
+            </TableRow>
           </TableHeader>
+          
           <TableBody>
             {paginatedData.length === 0 ? (
               <TableRow>
-                <TableCell
-                  colSpan={filteredColumns.length}
-                  className="text-center py-8 text-muted-foreground"
-                >
-                  No data available
+                <TableCell colSpan={visibleColumns.length} className="h-24 text-center">
+                  No users found.
                 </TableCell>
               </TableRow>
             ) : (
-              paginatedData.map((group, groupIndex) => {
-                if (group.isGroup && groupBy) {
-                  const groupedData = group as GroupedData<T>
-                  const isExpanded = expandedGroups.has(groupedData.groupKey)
-                  return (
-                    <React.Fragment key={groupedData.groupKey}>
-                      <GroupHeader
-                        groupKey={columns.find(c => c.id === groupBy)?.header || ""}
-                        groupValue={groupedData.groupValue}
-                        count={groupedData.data.length}
-                        isExpanded={isExpanded}
-                        onToggle={() => toggleGroup(groupedData.groupKey)}
-                      />
-                      {isExpanded &&
-                        groupedData.data.map((row, rowIndex) => (
-                          <TableRow
-                            key={`${groupedData.groupKey}-${rowIndex}`}
-                            className={cn(
-                              "hover:bg-muted/50 cursor-pointer transition-colors",
-                              onRowClick && "cursor-pointer"
-                            )}
-                            onClick={() => onRowClick?.(row)}
-                          >
-                            {filteredColumns.map((column) => (
-                              <TableCell key={column.id} className="px-4 py-3">
-                                {column.cell
-                                  ? column.cell(
-                                      column.accessorKey ? getNestedValue(row, column.accessorKey) : row,
-                                      row
-                                    )
-                                  : column.accessorKey
-                                  ? String(getNestedValue(row, column.accessorKey) || "")
-                                  : ""}
-                              </TableCell>
-                            ))}
-                          </TableRow>
-                        ))}
-                    </React.Fragment>
-                  )
-                } else {
-                  const ungroupedData = group as UngroupedData<T>
-                  return ungroupedData.data.map((row, rowIndex) => (
-                    <TableRow
-                      key={rowIndex}
-                      className={cn(
-                        "hover:bg-muted/50 transition-colors",
-                        onRowClick && "cursor-pointer"
-                      )}
-                      onClick={() => onRowClick?.(row)}
-                    >
-                      {filteredColumns.map((column) => (
-                        <TableCell key={column.id} className="px-4 py-3">
-                          {column.cell
-                            ? column.cell(
-                                column.accessorKey ? getNestedValue(row, column.accessorKey) : row,
-                                row
-                              )
-                            : column.accessorKey
-                            ? String(getNestedValue(row, column.accessorKey) || "")
-                            : ""}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))
-                }
-              })
+              paginatedData.map((user) => (
+                <TableRow
+                  key={user.id}
+                  className={cn(
+                    "hover:bg-muted/50 transition-colors",
+                    onUserClick && "cursor-pointer"
+                  )}
+                  onClick={() => onUserClick?.(user)}
+                >
+                  {visibleColumns.map((column) => (
+                    <TableCell key={column.id} className="py-3">
+                      {column.cell
+                        ? column.cell(
+                            column.accessorKey ? user[column.accessorKey as keyof User] : user,
+                            user
+                          )
+                        : column.accessorKey
+                        ? String(user[column.accessorKey as keyof User] || "")
+                        : ""}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
             )}
           </TableBody>
         </Table>
+      </div>
+
+      {/* Pagination */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <p className="text-sm text-muted-foreground">
+            Showing {Math.min((currentPage - 1) * pageSize + 1, sortedData.length)} to{" "}
+            {Math.min(currentPage * pageSize, sortedData.length)} of {sortedData.length} results
+          </p>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={goToFirstPage}
+            disabled={currentPage === 1}
+          >
+            <ChevronsLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={goToPreviousPage}
+            disabled={currentPage === 1}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          
+          <div className="flex items-center gap-1">
+            <span className="text-sm font-medium">
+              Page {currentPage} of {totalPages}
+            </span>
+          </div>
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={goToNextPage}
+            disabled={currentPage === totalPages}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={goToLastPage}
+            disabled={currentPage === totalPages}
+          >
+            <ChevronsRight className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
     </div>
   )
 }
 
-export default AdvancedTable
+export default AdvancedUserTable
