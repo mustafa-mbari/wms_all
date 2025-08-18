@@ -24,37 +24,46 @@ export const ThemeProviderContext = React.createContext<ThemeProviderState>(init
 
 export function ThemeProvider({
   children,
-  defaultTheme = "system",
+  defaultTheme = "light",
   storageKey = "ui-theme",
   ...props
 }: ThemeProviderProps) {
   const [theme, setTheme] = React.useState<Theme>(defaultTheme)
+  const [mounted, setMounted] = React.useState(false)
 
   React.useEffect(() => {
-    const root = window.document.documentElement
-    root.classList.remove("light", "dark")
-
-    if (theme === "system") {
-      const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
-      root.classList.add(systemTheme)
-      return
-    }
-
-    root.classList.add(theme)
-  }, [theme])
-
-  React.useEffect(() => {
-    const stored = localStorage.getItem(storageKey)
-    if (stored && (stored === "light" || stored === "dark" || stored === "system")) {
-      setTheme(stored as Theme)
+    setMounted(true)
+    
+    // Check localStorage for saved theme
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem(storageKey)
+      if (stored && (stored === "light" || stored === "dark" || stored === "system")) {
+        setTheme(stored as Theme)
+      }
     }
   }, [storageKey])
 
+  React.useEffect(() => {
+    if (!mounted) return
+    
+    const root = window.document.documentElement
+    root.classList.remove("light", "dark")
+
+    let effectiveTheme = theme
+    if (theme === "system") {
+      effectiveTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+    }
+
+    root.classList.add(effectiveTheme)
+    console.log("Applied theme class:", effectiveTheme, "to DOM element:", root.className)
+  }, [theme, mounted])
+
   const value = {
     theme,
-    setTheme: (theme: Theme) => {
-      localStorage.setItem(storageKey, theme)
-      setTheme(theme)
+    setTheme: (newTheme: Theme) => {
+      console.log("Setting theme from", theme, "to", newTheme);
+      localStorage.setItem(storageKey, newTheme)
+      setTheme(newTheme)
     },
   }
 

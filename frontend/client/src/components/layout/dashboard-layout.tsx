@@ -245,10 +245,26 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const { theme, setTheme } = useTheme();
   const [, setLocation] = useLocation();
 
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const handleLogout = () => {
     logout();
     setLocation('/');
   };
+
+  const handleThemeToggle = () => {
+    console.log("Current theme before toggle:", theme);
+    const newTheme = theme === "dark" ? "light" : "dark";
+    console.log("Switching to theme:", newTheme);
+    setTheme(newTheme);
+  };
+
+  // Simple theme display - if not mounted, default to light
+  const displayTheme = mounted ? theme : "light";
 
   const getUserInitials = (user: any) => {
     if (user?.firstName && user?.lastName) {
@@ -298,9 +314,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             <Button 
               variant="ghost" 
               size="icon"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              onClick={handleThemeToggle}
+              title={`Switch to ${displayTheme === "dark" ? "light" : "dark"} mode`}
             >
-              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              {displayTheme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
             
             {/* User Menu */}
