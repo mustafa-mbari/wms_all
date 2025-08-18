@@ -96,27 +96,56 @@ export default function ProductsPage() {
   const productFormSchema = insertProductSchema.extend({
     categoryId: z.coerce.number().optional(),
     uomId: z.string().optional(),
-    price: z.coerce.number().min(0, "Price cannot be negative").optional(),
-    cost: z.coerce.number().min(0, "Cost cannot be negative").optional(),
+    price: z.string().optional(),
+    cost: z.string().optional(),
+    weight: z.string().optional(),
+    length: z.string().optional(),
+    width: z.string().optional(),
+    height: z.string().optional(),
     minStockLevel: z.coerce.number().min(0, "Min stock level cannot be negative").optional(),
     maxStockLevel: z.coerce.number().min(0, "Max stock level cannot be negative").optional(),
     reorderPoint: z.coerce.number().min(0, "Reorder point cannot be negative").optional(),
+    leadTime: z.coerce.number().min(0, "Lead time cannot be negative").optional(),
     isActive: z.boolean().default(true)
   });
 
   // Fetch products
   const { data: productsData, isLoading, error } = useQuery({
     queryKey: ["/api/products"],
+    queryFn: async () => {
+      const response = await fetch("/api/products");
+      if (!response.ok) {
+        throw new Error("Failed to fetch products");
+      }
+      const result = await response.json();
+      return result.data || [];
+    },
   });
 
   // Fetch categories for dropdown
   const { data: categoriesData } = useQuery({
     queryKey: ["/api/product-categories"],
+    queryFn: async () => {
+      const response = await fetch("/api/product-categories");
+      if (!response.ok) {
+        throw new Error("Failed to fetch categories");
+      }
+      const result = await response.json();
+      return result.data || [];
+    },
   });
 
   // Fetch units of measure for dropdown
   const { data: uomData } = useQuery({
     queryKey: ["/api/units-of-measure"],
+    queryFn: async () => {
+      const response = await fetch("/api/units-of-measure");
+      if (!response.ok) {
+        throw new Error("Failed to fetch units of measure");
+      }
+      const result = await response.json();
+      return result.data || [];
+    },
   });
 
   // Create form for new product
@@ -225,17 +254,17 @@ export default function ProductsPage() {
       description: product.description || "",
       categoryId: product.categoryId || undefined,
       uomId: product.uomId || undefined,
-      price: product.price ? Number(product.price) : undefined,
-      cost: product.cost ? Number(product.cost) : undefined,
-      weight: product.weight ? Number(product.weight) : undefined,
-      length: product.length ? Number(product.length) : undefined,
-      width: product.width ? Number(product.width) : undefined,
-      height: product.height ? Number(product.height) : undefined,
+      price: product.price || "",
+      cost: product.cost || "",
+      weight: product.weight || "",
+      length: product.length || "",
+      width: product.width || "",
+      height: product.height || "",
       minStockLevel: product.minStockLevel || 0,
       maxStockLevel: product.maxStockLevel || undefined,
       reorderPoint: product.reorderPoint || undefined,
       leadTime: product.leadTime || undefined,
-      isActive: product.isActive,
+      isActive: product.isActive ?? true,
       barcode: product.barcode || "",
       imageUrl: product.imageUrl || "",
     });
@@ -394,7 +423,11 @@ export default function ProductsPage() {
                           <FormItem>
                             <FormLabel>Description</FormLabel>
                             <FormControl>
-                              <Input placeholder="Product description" {...field} />
+                              <Input 
+                                placeholder="Product description" 
+                                {...field} 
+                                value={field.value || ""} 
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -660,7 +693,11 @@ export default function ProductsPage() {
                             <FormItem>
                               <FormLabel>Barcode</FormLabel>
                               <FormControl>
-                                <Input placeholder="Barcode" {...field} />
+                                <Input 
+                                  placeholder="Barcode" 
+                                  {...field} 
+                                  value={field.value || ""} 
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -675,7 +712,11 @@ export default function ProductsPage() {
                           <FormItem>
                             <FormLabel>Image URL</FormLabel>
                             <FormControl>
-                              <Input placeholder="Image URL" {...field} />
+                              <Input 
+                                placeholder="Image URL" 
+                                {...field} 
+                                value={field.value || ""} 
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>

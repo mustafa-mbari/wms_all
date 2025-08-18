@@ -8,6 +8,10 @@ import InventoryMovements from "@/pages/inventory/movements";
 import InventoryAdjustments from "@/pages/inventory/adjustments";
 import ProductsPage from "@/pages/products";
 import ProductCategoriesPage from "@/pages/products/categories";
+import ProductFamiliesPage from "@/pages/products/families";
+import ProductAttributesPage from "@/pages/products/attributes";
+import ProductAttributeOptionsPage from "@/pages/products/attribute-options";
+import ProductAttributeValuesPage from "@/pages/products/attribute-values";
 import UnitsOfMeasurePage from "@/pages/products/uom";
 import OrdersPage from "@/pages/orders";
 import WarehousesPage from "@/pages/warehouses";
@@ -30,6 +34,10 @@ function Router() {
       <ProtectedRoute path="/inventory/adjustments" component={InventoryAdjustments} />
       <ProtectedRoute path="/products" component={ProductsPage} />
       <ProtectedRoute path="/products/categories" component={ProductCategoriesPage} />
+      <ProtectedRoute path="/products/families" component={ProductFamiliesPage} />
+      <ProtectedRoute path="/products/attributes" component={ProductAttributesPage} />
+      <ProtectedRoute path="/products/attribute-options" component={ProductAttributeOptionsPage} />
+      <ProtectedRoute path="/products/attribute-values" component={ProductAttributeValuesPage} />
       <ProtectedRoute path="/products/uom" component={UnitsOfMeasurePage} />
       <ProtectedRoute path="/orders" component={OrdersPage} />
       <ProtectedRoute path="/orders/new" component={OrdersPage} />

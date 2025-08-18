@@ -64,8 +64,12 @@ const navigation = [
     href: "/products", 
     icon: Package,
     children: [
-      { name: "All Products", href: "/products" },
+      { name: "Products", href: "/products" },
       { name: "Categories", href: "/products/categories" },
+      { name: "Product Families", href: "/products/families" },
+      { name: "Attributes", href: "/products/attributes" },
+      { name: "Attribute Options", href: "/products/attribute-options" },
+      { name: "Attribute Values", href: "/products/attribute-values" },
       { name: "Units of Measure", href: "/products/uom" },
     ]
   },
