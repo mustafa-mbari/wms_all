@@ -48,8 +48,9 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function AuthPage() {
   const [activeTab, setActiveTab] = useState<string>("login");
+  const [isLoading, setIsLoading] = useState(false);
   const [location, navigate] = useLocation();
-  const { user, loginMutation, registerMutation } = useAuth();
+  const { user, login, register } = useAuth();
 
   // Redirect if already logged in
   useEffect(() => {
@@ -79,14 +80,28 @@ export default function AuthPage() {
     },
   });
 
-  const onLoginSubmit = (values: LoginFormValues) => {
-    loginMutation.mutate(values);
+  const onLoginSubmit = async (values: LoginFormValues) => {
+    try {
+      setIsLoading(true);
+      await login(values);
+    } catch (error) {
+      // Error handling is done in the login function
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const onRegisterSubmit = (values: RegisterFormValues) => {
-    // Remove confirmPassword as it's not part of the API schema
-    const { confirmPassword, ...registrationData } = values;
-    registerMutation.mutate(registrationData);
+  const onRegisterSubmit = async (values: RegisterFormValues) => {
+    try {
+      setIsLoading(true);
+      // Remove confirmPassword as it's not part of the API schema
+      const { confirmPassword, ...registrationData } = values;
+      await register(registrationData);
+    } catch (error) {
+      // Error handling is done in the register function
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -187,9 +202,9 @@ export default function AuthPage() {
                     <Button
                       type="submit"
                       className="w-full h-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200"
-                      disabled={loginMutation.isPending}
+                      disabled={isLoading}
                     >
-                      {loginMutation.isPending ? (
+                      {isLoading ? (
                         <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                       ) : (
                         <LogIn className="mr-2 h-5 w-5" />
@@ -234,13 +249,16 @@ export default function AuthPage() {
             </TabsContent>
 
             <TabsContent value="register" className="space-y-0">
-              <div>
-                <div className="mb-6">
-                  <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Create account</h3>
-                  <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                    Get started with your WMS account
-                  </p>
-                </div>
+              <Card className="border-none shadow-none">
+                <CardHeader className="pb-6">
+                  <div className="mb-6">
+                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Create account</h3>
+                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                      Get started with your WMS account
+                    </p>
+                  </div>
+                </CardHeader>
+                <CardContent>
 
                 <Form {...registerForm}>
                     <form
@@ -342,9 +360,9 @@ export default function AuthPage() {
                       <Button
                         type="submit"
                         className="w-full"
-                        disabled={registerMutation.isPending}
+                        disabled={isLoading}
                       >
-                        {registerMutation.isPending ? (
+                        {isLoading ? (
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         ) : (
                           <UserPlus className="mr-2 h-4 w-4" />
