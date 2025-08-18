@@ -15,6 +15,12 @@ const roleRoutes = require('./src/routes/roles');
 const productRoutes = require('./src/routes/products');
 const warehouseRoutes = require('./src/routes/warehouses');
 const systemRoutes = require('./src/routes/system');
+const unitsOfMeasureRoutes = require('./src/routes/units-of-measure');
+const productCategoriesRoutes = require('./src/routes/product-categories');
+const productFamiliesRoutes = require('./src/routes/product-families');
+const productAttributesRoutes = require('./src/routes/product-attributes');
+const productAttributeOptionsRoutes = require('./src/routes/product-attribute-options');
+const productAttributeValuesRoutes = require('./src/routes/product-attribute-values');
 
 // Import middleware
 const { verifyToken } = require('./src/middleware/auth');
@@ -101,6 +107,12 @@ app.use('/api/roles', verifyToken, roleRoutes);
 app.use('/api/products', verifyToken, productRoutes);
 app.use('/api/warehouses', verifyToken, warehouseRoutes);
 app.use('/api/system', verifyToken, systemRoutes);
+app.use('/api/units-of-measure', verifyToken, unitsOfMeasureRoutes);
+app.use('/api/product-categories', verifyToken, productCategoriesRoutes);
+app.use('/api/product-families', verifyToken, productFamiliesRoutes);
+app.use('/api/product-attributes', verifyToken, productAttributesRoutes);
+app.use('/api/product-attribute-options', verifyToken, productAttributeOptionsRoutes);
+app.use('/api/product-attribute-values', verifyToken, productAttributeValuesRoutes);
 
 // Welcome route
 app.get('/', (req, res) => {
@@ -115,7 +127,13 @@ app.get('/', (req, res) => {
       roles: '/api/roles',
       products: '/api/products',
       warehouses: '/api/warehouses',
-      system: '/api/system'
+      system: '/api/system',
+      'units-of-measure': '/api/units-of-measure',
+      'product-categories': '/api/product-categories',
+      'product-families': '/api/product-families',
+      'product-attributes': '/api/product-attributes',
+      'product-attribute-options': '/api/product-attribute-options',
+      'product-attribute-values': '/api/product-attribute-values'
     }
   });
 });

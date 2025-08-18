@@ -37,7 +37,13 @@ app.get('/', (req, res) => {
       login: 'POST /api/auth/login',
       users: '/api/users',
       products: '/api/products',
-      warehouses: '/api/warehouses'
+      warehouses: '/api/warehouses',
+      'units-of-measure': '/api/units-of-measure',
+      'product-categories': '/api/product-categories',
+      'product-families': '/api/product-families',
+      'product-attributes': '/api/product-attributes',
+      'product-attribute-options': '/api/product-attribute-options',
+      'product-attribute-values': '/api/product-attribute-values'
     },
     demoCredentials: {
       admin: { username: 'admin', password: 'admin123' },
@@ -568,13 +574,294 @@ app.delete('/api/users/:id', async (req, res) => {
   }
 });
 
-// Basic products routes
-app.get('/api/products', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Products endpoint - Database setup required',
-    data: []
-  });
+// Products API Routes
+app.get('/api/products', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        p.*,
+        pc.name as category_name,
+        pf.name as family_name,
+        uom.name as unit_name,
+        uom.symbol as unit_symbol
+      FROM products p
+      LEFT JOIN product_categories pc ON p.category_id = pc.id
+      LEFT JOIN product_families pf ON p.family_id = pf.id
+      LEFT JOIN units_of_measure uom ON p.unit_id = uom.id
+      WHERE p.status = 'active'
+      ORDER BY p.name
+    `);
+    
+    res.json({
+      success: true,
+      message: 'Products retrieved successfully',
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Error fetching products:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch products',
+      error: error.message
+    });
+  }
+});
+
+app.get('/api/products/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const productResult = await pool.query(`
+      SELECT 
+        p.*,
+        pc.name as category_name,
+        pf.name as family_name,
+        uom.name as unit_name,
+        uom.symbol as unit_symbol
+      FROM products p
+      LEFT JOIN product_categories pc ON p.category_id = pc.id
+      LEFT JOIN product_families pf ON p.family_id = pf.id
+      LEFT JOIN units_of_measure uom ON p.unit_id = uom.id
+      WHERE p.id = $1
+    `, [id]);
+
+    if (productResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Product not found'
+      });
+    }
+
+    const product = productResult.rows[0];
+
+    // Get product attributes
+    const attributesResult = await pool.query(`
+      SELECT 
+        pa.name as attribute_name,
+        pa.slug as attribute_slug,
+        pa.type as attribute_type,
+        pav.value,
+        pao.label as option_label
+      FROM product_attribute_values pav
+      JOIN product_attributes pa ON pav.attribute_id = pa.id
+      LEFT JOIN product_attribute_options pao ON pav.option_id = pao.id
+      WHERE pav.product_id = $1
+    `, [id]);
+
+    product.attributes = attributesResult.rows;
+
+    res.json({
+      success: true,
+      message: 'Product retrieved successfully',
+      data: product
+    });
+  } catch (error) {
+    console.error('Error fetching product:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch product',
+      error: error.message
+    });
+  }
+});
+
+// Units of Measure API Routes
+app.get('/api/units-of-measure', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT * FROM units_of_measure 
+      WHERE is_active = true 
+      ORDER BY name
+    `);
+    
+    res.json({
+      success: true,
+      message: 'Units of measure retrieved successfully',
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Error fetching units of measure:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch units of measure',
+      error: error.message
+    });
+  }
+});
+
+// Product Categories API Routes
+app.get('/api/product-categories', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        pc.*,
+        parent.name as parent_name
+      FROM product_categories pc
+      LEFT JOIN product_categories parent ON pc.parent_id = parent.id
+      WHERE pc.is_active = true
+      ORDER BY pc.sort_order, pc.name
+    `);
+    
+    res.json({
+      success: true,
+      message: 'Product categories retrieved successfully',
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Error fetching product categories:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch product categories',
+      error: error.message
+    });
+  }
+});
+
+// Product Families API Routes
+app.get('/api/product-families', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        pf.*,
+        pc.name as category_name
+      FROM product_families pf
+      LEFT JOIN product_categories pc ON pf.category_id = pc.id
+      WHERE pf.is_active = true
+      ORDER BY pf.name
+    `);
+    
+    res.json({
+      success: true,
+      message: 'Product families retrieved successfully',
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Error fetching product families:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch product families',
+      error: error.message
+    });
+  }
+});
+
+// Product Attributes API Routes
+app.get('/api/product-attributes', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT * FROM product_attributes 
+      WHERE is_active = true 
+      ORDER BY sort_order, name
+    `);
+    
+    res.json({
+      success: true,
+      message: 'Product attributes retrieved successfully',
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Error fetching product attributes:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch product attributes',
+      error: error.message
+    });
+  }
+});
+
+// Product Attribute Options API Routes
+app.get('/api/product-attribute-options', async (req, res) => {
+  try {
+    const { attribute_id } = req.query;
+    
+    let query = `
+      SELECT 
+        pao.*,
+        pa.name as attribute_name,
+        pa.slug as attribute_slug
+      FROM product_attribute_options pao
+      JOIN product_attributes pa ON pao.attribute_id = pa.id
+      WHERE pao.is_active = true
+    `;
+    
+    const params = [];
+    if (attribute_id) {
+      query += ` AND pao.attribute_id = $1`;
+      params.push(attribute_id);
+    }
+    
+    query += ` ORDER BY pao.sort_order, pao.value`;
+    
+    const result = await pool.query(query, params);
+    
+    res.json({
+      success: true,
+      message: 'Product attribute options retrieved successfully',
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Error fetching product attribute options:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch product attribute options',
+      error: error.message
+    });
+  }
+});
+
+// Product Attribute Values API Routes
+app.get('/api/product-attribute-values', async (req, res) => {
+  try {
+    const { product_id, attribute_id } = req.query;
+    
+    let query = `
+      SELECT 
+        pav.*,
+        pa.name as attribute_name,
+        pa.slug as attribute_slug,
+        pa.type as attribute_type,
+        p.name as product_name,
+        p.sku as product_sku,
+        pao.label as option_label
+      FROM product_attribute_values pav
+      JOIN product_attributes pa ON pav.attribute_id = pa.id
+      JOIN products p ON pav.product_id = p.id
+      LEFT JOIN product_attribute_options pao ON pav.option_id = pao.id
+      WHERE 1=1
+    `;
+    
+    const params = [];
+    let paramIndex = 1;
+    
+    if (product_id) {
+      query += ` AND pav.product_id = $${paramIndex}`;
+      params.push(product_id);
+      paramIndex++;
+    }
+    
+    if (attribute_id) {
+      query += ` AND pav.attribute_id = $${paramIndex}`;
+      params.push(attribute_id);
+      paramIndex++;
+    }
+    
+    query += ` ORDER BY p.name, pa.sort_order`;
+    
+    const result = await pool.query(query, params);
+    
+    res.json({
+      success: true,
+      message: 'Product attribute values retrieved successfully',
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Error fetching product attribute values:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch product attribute values',
+      error: error.message
+    });
+  }
 });
 
 // Basic warehouses routes
