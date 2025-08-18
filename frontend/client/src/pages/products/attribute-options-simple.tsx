@@ -1,6 +1,5 @@
 import React from 'react';
-import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { AdvancedGenericTable } from '@/components/tables/advanced-generic-table-fixed';
+import { AdvancedGenericTable } from '../../components/tables/advanced-generic-table-fixed';
 
 // Mock data for development
 const mockAttributeOptions = [
@@ -117,16 +116,14 @@ export default function ProductAttributeOptionsPage() {
   };
 
   return (
-    <DashboardLayout>
-      <div className="p-6">
-        <AdvancedGenericTable
-          data={mockAttributeOptions}
-          config={tableConfig}
-          onItemEdit={(item: AttributeOption) => console.log('Edit attribute option:', item)}
-          onItemDelete={(item: AttributeOption) => console.log('Delete attribute option:', item)}
-          onBulkAction={(action: string, items: string[]) => console.log('Bulk action:', action, items)}
-        />
-      </div>
-    </DashboardLayout>
+    <div className="p-6">
+      <AdvancedGenericTable
+        data={mockAttributeOptions}
+        config={tableConfig}
+        onItemEdit={(item: AttributeOption) => console.log('Edit attribute option:', item)}
+        onItemDelete={(item: AttributeOption) => console.log('Delete attribute option:', item)}
+        onBulkAction={(action: string, items: string[]) => console.log('Bulk action:', action, items)}
+      />
+    </div>
   );
 }

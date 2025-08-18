@@ -1,5 +1,5 @@
 
-import { ReactNode, useState, useEffect } from "react";
+import React, { useEffect, useState, ReactNode } from 'react';
 import { Link, useLocation } from "wouter";
 import { 
   Home,
@@ -90,7 +90,7 @@ const navigation = [
 
 function AppSidebar() {
   const [location] = useLocation();
-  const [openMenus, setOpenMenus] = useState<string[]>([]);
+  const [manuallyOpenMenus, setManuallyOpenMenus] = useState<string[]>([]);
   const { isSuperAdmin, isAdmin, hasRole } = useAuth();
 
   // Filter menu items based on user permissions
@@ -107,32 +107,37 @@ function AppSidebar() {
 
   const filteredMenuItems = getFilteredMenuItems();
 
+  // Calculate which menus should be open based on current location
+  const getAutoOpenMenus = () => {
+    if (location.startsWith('/products')) {
+      return ['Products'];
+    } else if (location.startsWith('/inventory')) {
+      return ['Inventory'];
+    }
+    return [];
+  };
+
+  // Combine auto-opened menus with manually opened ones
+  const openMenus = Array.from(new Set([...getAutoOpenMenus(), ...manuallyOpenMenus]));
+
   // Toggle submenu and close others
   const toggleMenu = (menuName: string) => {
-    setOpenMenus(prev => {
-      if (prev.includes(menuName)) {
+    const autoOpenMenus = getAutoOpenMenus();
+    
+    setManuallyOpenMenus(prev => {
+      if (openMenus.includes(menuName)) {
+        // If it's an auto-opened menu, don't close it
+        if (autoOpenMenus.includes(menuName)) {
+          return prev;
+        }
+        // Otherwise, remove it from manually opened
         return prev.filter(name => name !== menuName);
       } else {
-        // Close all other menus and open this one
-        return [menuName];
+        // Add to manually opened
+        return [...prev.filter(name => name !== menuName), menuName];
       }
     });
   };
-
-  // Check if current route is in submenu to auto-expand
-  const isSubmenuActive = (item: any) => {
-    if (!item.children) return false;
-    return item.children.some((child: any) => location === child.href);
-  };
-
-  // Auto-expand active submenu
-  useEffect(() => {
-    navigation.forEach(item => {
-      if (item.children && isSubmenuActive(item) && !openMenus.includes(item.name)) {
-        setOpenMenus([item.name]);
-      }
-    });
-  }, [location]);
 
   return (
     <Sidebar variant="inset" className="border-r">
@@ -165,7 +170,7 @@ function AppSidebar() {
                           <SidebarMenuButton 
                             isActive={isActive}
                             className={cn(
-                              "w-full justify-between rounded-md transition-all duration-200",
+                              "w-full justify-between rounded-md transition-all duration-300 ease-in-out",
                               "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                               isActive && "bg-primary/10 text-primary font-medium border-l-2 border-primary"
                             )}
@@ -176,13 +181,13 @@ function AppSidebar() {
                             </div>
                             <ChevronRight 
                               className={cn(
-                                "h-4 w-4 transition-transform duration-200",
+                                "h-4 w-4 transition-transform duration-300 ease-in-out",
                                 isMenuOpen && "rotate-90"
                               )} 
                             />
                           </SidebarMenuButton>
                         </CollapsibleTrigger>
-                        <CollapsibleContent className="transition-all duration-200 data-[state=open]:animate-slideDown data-[state=closed]:animate-slideUp">
+                        <CollapsibleContent className="transition-all duration-300 ease-in-out overflow-hidden">
                           <SidebarMenuSub className="ml-4 mt-1 border-l border-sidebar-border/50">
                             {item.children.map((child) => {
                               const childIsActive = location === child.href;
@@ -192,7 +197,7 @@ function AppSidebar() {
                                     asChild 
                                     isActive={childIsActive}
                                     className={cn(
-                                      "rounded-md transition-all duration-200",
+                                      "rounded-md transition-all duration-300 ease-in-out",
                                       "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                                       childIsActive && "bg-primary/10 text-primary font-medium border-l-2 border-primary"
                                     )}
@@ -217,7 +222,7 @@ function AppSidebar() {
                       asChild 
                       isActive={isActive}
                       className={cn(
-                        "rounded-md transition-all duration-200",
+                        "rounded-md transition-all duration-300 ease-in-out",
                         "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                         isActive && "bg-primary/10 text-primary font-medium border-l-2 border-primary"
                       )}

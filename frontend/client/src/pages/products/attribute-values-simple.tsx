@@ -1,6 +1,6 @@
 import React from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { AdvancedGenericTable } from '@/components/tables/advanced-generic-table-fixed';
+import { AdvancedGenericTable } from '../../components/tables/advanced-generic-table-fixed';
 
 // Mock data for development
 const mockAttributeValues = [
