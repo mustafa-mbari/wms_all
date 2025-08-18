@@ -152,7 +152,7 @@ export function AdvancedGenericTable<T extends Record<string, any>>({
     const clearedFilters: Record<string, string> = {}
     config.columns.forEach(col => {
       if (col.filterable !== false) {
-        clearedFilters[col.key] = ""
+        clearedFilters[col.key] = col.filterType === "select" ? "__all__" : ""
       }
     })
     setFilters(clearedFilters)
@@ -182,7 +182,7 @@ export function AdvancedGenericTable<T extends Record<string, any>>({
   const filteredData = useMemo(() => {
     return data.filter((item) => {
       return config.columns.every(col => {
-        if (col.filterable === false || !filters[col.key]) return true
+        if (col.filterable === false || !filters[col.key] || filters[col.key] === "__all__") return true
         
         const itemValue = item[col.key]
         const filterValue = filters[col.key].toLowerCase()
@@ -292,7 +292,7 @@ export function AdvancedGenericTable<T extends Record<string, any>>({
             <SelectValue placeholder="All" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All</SelectItem>
+            <SelectItem value="__all__">All</SelectItem>
             {col.filterOptions.map(option => (
               <SelectItem key={option.value} value={option.value}>
                 {option.label}
@@ -310,7 +310,7 @@ export function AdvancedGenericTable<T extends Record<string, any>>({
             <SelectValue placeholder="All" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All</SelectItem>
+            <SelectItem value="__all__">All</SelectItem>
             <SelectItem value="true">Yes</SelectItem>
             <SelectItem value="false">No</SelectItem>
           </SelectContent>

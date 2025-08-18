@@ -3,14 +3,8 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { AdvancedUserTable } from "@/components/ui/advanced-user-table";
+import type { UserData } from "@/lib/export-utils";
 import {
   Card,
   CardContent,
@@ -49,17 +43,13 @@ import { Switch } from "@/components/ui/switch";
 import {
   Loader2,
   Plus,
-  Search,
-  FilterX,
   Download,
   AlertTriangle,
   Package,
   Edit,
   Trash2,
-  ArrowUpDown,
   Check,
   X,
-  MoreHorizontal,
   Save,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -83,14 +73,10 @@ import {
 
 export default function ProductsPage() {
   const { toast } = useToast();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<number | "">("");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [currentProduct, setCurrentProduct] = useState<Product | null>(null);
-  const [sortBy, setSortBy] = useState("name");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
   // Define form schema with zod
   const productFormSchema = insertProductSchema.extend({
@@ -282,45 +268,6 @@ export default function ProductsPage() {
     }
   };
 
-  // Sort and filter products
-  const filteredProducts = productsData ? [...productsData]
-    .filter((product: Product) => {
-      const matchesSearch = !searchTerm || 
-        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (product.description && product.description.toLowerCase().includes(searchTerm.toLowerCase()));
-
-      const matchesCategory = categoryFilter === "" || product.categoryId === categoryFilter;
-
-      return matchesSearch && matchesCategory;
-    })
-    .sort((a: Product, b: Product) => {
-      // Handle sorting
-      if (sortBy === "name") {
-        return sortOrder === "asc" 
-          ? a.name.localeCompare(b.name)
-          : b.name.localeCompare(a.name);
-      } else if (sortBy === "sku") {
-        return sortOrder === "asc"
-          ? a.sku.localeCompare(b.sku)
-          : b.sku.localeCompare(a.sku);
-      } else if (sortBy === "price") {
-        const aPrice = a.price ? Number(a.price) : 0;
-        const bPrice = b.price ? Number(b.price) : 0;
-        return sortOrder === "asc" ? aPrice - bPrice : bPrice - aPrice;
-      }
-      return 0;
-    }) : [];
-
-  const toggleSort = (field: string) => {
-    if (sortBy === field) {
-      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-    } else {
-      setSortBy(field);
-      setSortOrder("asc");
-    }
-  };
-
   if (isLoading) {
     return (
       <DashboardLayout>
@@ -354,6 +301,43 @@ export default function ProductsPage() {
       </DashboardLayout>
     );
   }
+
+  // Transform product data to match UserData interface for the advanced table
+  const transformedProducts: UserData[] = (productsData || []).map((product: Product) => ({
+    id: product.id.toString(),
+    username: product.sku || `product-${product.id}`,
+    email: product.name || "Unnamed Product",
+    first_name: product.name?.split(' ')[0] || "Product",
+    last_name: product.name?.split(' ').slice(1).join(' ') || "",
+    phone: product.price ? `$${product.price}` : "No Price",
+    is_active: product.isActive,
+    role_names: [categoriesData?.find((c: any) => c.id === product.categoryId)?.name || "Uncategorized"],
+    last_login_at: product.minStockLevel ? `Stock: ${product.minStockLevel}` : "No Stock Info",
+    created_at: product.createdAt ? new Date(product.createdAt).toLocaleDateString() : "Unknown",
+    updated_at: product.updatedAt ? new Date(product.updatedAt).toLocaleDateString() : "Unknown",
+  }));
+
+  const handleProductEdit = (user: UserData) => {
+    const product = (productsData || []).find((p: Product) => p.id.toString() === user.id);
+    if (product) {
+      handleEdit(product);
+    }
+  };
+
+  const handleProductDelete = (user: UserData) => {
+    const product = (productsData || []).find((p: Product) => p.id.toString() === user.id);
+    if (product) {
+      handleDelete(product);
+    }
+  };
+
+  const handleProductView = (user: UserData) => {
+    const product = (productsData || []).find((p: Product) => p.id.toString() === user.id);
+    if (product) {
+      // Handle view action
+      console.log("View product:", product);
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -757,145 +741,14 @@ export default function ProductsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="mb-4 flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-            <div className="relative w-full sm:w-1/3">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500 dark:text-gray-400" />
-              <Input
-                placeholder="Search products..."
-                className="pl-8"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-            <Select
-              value={categoryFilter ? categoryFilter.toString() : ""}
-              onValueChange={(value) => setCategoryFilter(value ? parseInt(value) : "")}
-            >
-              <SelectTrigger className="w-full sm:w-1/4">
-                <SelectValue placeholder="All Categories" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_all">All Categories</SelectItem>
-                {categoriesData?.map((category: any) => (
-                  <SelectItem key={category.id} value={category.id.toString()}>
-                    {category.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {(searchTerm || categoryFilter !== "") && (
-              <Button variant="outline" onClick={() => {
-                setSearchTerm("");
-                setCategoryFilter("");
-              }}>
-                <FilterX className="mr-2 h-4 w-4" /> Clear Filters
-              </Button>
-            )}
-          </div>
-
-          <div className="border rounded-md">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="cursor-pointer" onClick={() => toggleSort("name")}>
-                    <div className="flex items-center">
-                      Product Name
-                      {sortBy === "name" && (
-                        <ArrowUpDown className="ml-2 h-4 w-4" />
-                      )}
-                    </div>
-                  </TableHead>
-                  <TableHead className="cursor-pointer" onClick={() => toggleSort("sku")}>
-                    <div className="flex items-center">
-                      SKU
-                      {sortBy === "sku" && (
-                        <ArrowUpDown className="ml-2 h-4 w-4" />
-                      )}
-                    </div>
-                  </TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead className="cursor-pointer" onClick={() => toggleSort("price")}>
-                    <div className="flex items-center">
-                      Price
-                      {sortBy === "price" && (
-                        <ArrowUpDown className="ml-2 h-4 w-4" />
-                      )}
-                    </div>
-                  </TableHead>
-                  <TableHead>Stock</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredProducts.length > 0 ? (
-                  filteredProducts.map((product: Product) => (
-                    <TableRow key={product.id}>
-                      <TableCell className="font-medium">{product.name}</TableCell>
-                      <TableCell>{product.sku}</TableCell>
-                      <TableCell>
-                        {categoriesData?.find((c: any) => c.id === product.categoryId)?.name || "—"}
-                      </TableCell>
-                      <TableCell>
-                        {product.price ? new Intl.NumberFormat('en-US', {
-                          style: 'currency',
-                          currency: 'USD'
-                        }).format(Number(product.price)) : "—"}
-                      </TableCell>
-                      <TableCell>
-                        {product.minStockLevel !== null ? (
-                          <Badge variant="outline">Min: {product.minStockLevel}</Badge>
-                        ) : "—"}
-                      </TableCell>
-                      <TableCell>
-                        {product.isActive ? (
-                          <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
-                            <Check className="mr-1 h-3 w-3" /> Active
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="border-red-200 text-red-800 dark:border-red-800 dark:text-red-300">
-                            <X className="mr-1 h-3 w-3" /> Inactive
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreHorizontal className="h-4 w-4" />
-                              <span className="sr-only">Open menu</span>
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => handleEdit(product)}>
-                              <Edit className="mr-2 h-4 w-4" /> Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDelete(product)}>
-                              <Trash2 className="mr-2 h-4 w-4 text-red-500" /> Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
-                      No products found
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-
-          <div className="flex items-center justify-end space-x-2 py-4">
-            <div className="text-sm text-muted-foreground">
-              {filteredProducts.length} product(s) found
-            </div>
-          </div>
+          {/* Using AdvancedUserTable with transformed product data */}
+          <AdvancedUserTable
+            data={transformedProducts}
+            loading={isLoading}
+            onUserEdit={handleProductEdit}
+            onUserDelete={handleProductDelete}
+            onUserView={handleProductView}
+          />
         </CardContent>
       </Card>
 
