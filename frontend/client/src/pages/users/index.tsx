@@ -7,7 +7,6 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { AdvancedUserTable } from "@/components/ui/advanced-user-table";
-import { ThemeProvider } from "@/components/ui/theme-provider";
 import type { UserData } from "@/lib/export-utils";
 import {
   Card,
@@ -757,14 +756,12 @@ export default function UsersPage() {
           </div>
 
           {/* Enhanced Table with Search, Filter, and Column Controls */}
-          <ThemeProvider>
-            <AdvancedUserTable
-              data={transformedUsers}
-              loading={isLoading}
-              onUserSelect={handleUserSelection}
-              onBulkAction={handleBulkAction}
-            />
-          </ThemeProvider>
+          <AdvancedUserTable
+            data={transformedUsers}
+            loading={isLoading}
+            onUserSelect={handleUserSelection}
+            onBulkAction={handleBulkAction}
+          />
         </CardContent>
       </Card>
 

@@ -51,6 +51,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
+import { useTheme } from "@/components/ui/theme-provider";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -241,6 +242,7 @@ function AppSidebar() {
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const { user, logout } = useAuth();
+  const { theme, setTheme } = useTheme();
   const [, setLocation] = useLocation();
 
   const handleLogout = () => {
@@ -293,8 +295,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             </Button>
             
             {/* Theme Toggle */}
-            <Button variant="ghost" size="icon">
-              <Sun className="h-4 w-4" />
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            >
+              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
             
             {/* User Menu */}
