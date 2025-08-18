@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { WmTable, type UserWithRoles } from "@/components/tables/wm-table";
+import { AdvancedUserTable } from "@/components/ui/advanced-user-table";
+import { ThemeProvider } from "@/components/ui/theme-provider";
+import type { UserData } from "@/lib/export-utils";
 import {
   Card,
   CardContent,
@@ -80,6 +82,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+
+// Extended User type with role information from the API
+export interface UserWithRoles extends User {
+  role_names?: string[];
+  role_slugs?: string[];
+}
 
 export default function UsersPage() {
   const { toast } = useToast();
@@ -355,35 +363,63 @@ export default function UsersPage() {
     setIsPasswordDialogOpen(true);
   };
 
-  // Filter and sort users
-  const filteredUsers = usersData ? [...usersData]
-    .filter((user: UserWithRoles) => {
-      const matchesSearch = !searchTerm || 
-        user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        `${user.firstName} ${user.lastName}`.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const matchesRole = roleFilter === "_all" || 
-        (roleFilter === "admin" && (user.role_slugs?.includes('admin') || user.role_slugs?.includes('super-admin'))) ||
-        (roleFilter === "user" && (!user.role_slugs || user.role_slugs.length === 0 || user.role_slugs?.includes('employee') || user.role_slugs?.includes('viewer') || user.role_slugs?.includes('manager')));
-      
-      return matchesSearch && matchesRole;
-    })
-    .sort((a: User, b: User) => {
-      // Handle sorting
-      if (sortBy === "username") {
-        return sortOrder === "asc" 
-          ? a.username.localeCompare(b.username)
-          : b.username.localeCompare(a.username);
-      } else if (sortBy === "name") {
-        const aName = `${a.firstName || ""} ${a.lastName || ""}`.trim();
-        const bName = `${b.firstName || ""} ${b.lastName || ""}`.trim();
-        return sortOrder === "asc" ? aName.localeCompare(bName) : bName.localeCompare(aName);
-      } else if (sortBy === "email") {
-        return sortOrder === "asc" ? a.email.localeCompare(b.email) : b.email.localeCompare(a.email);
-      }
-      return 0;
-    }) : [];
+  // Transform UserWithRoles to UserData format for the advanced table
+  const transformedUsers: UserData[] = useMemo(() => {
+    if (!usersData) return [];
+    
+    return usersData.map((user: UserWithRoles) => ({
+      id: String(user.id),
+      username: user.username,
+      email: user.email,
+      first_name: user.firstName || "",
+      last_name: user.lastName || "",
+      phone: user.phone || undefined,
+      is_active: user.isActive ?? true,
+      email_verified: false, // This field doesn't exist in the schema, set default
+      last_login_at: user.lastLogin ? (typeof user.lastLogin === 'string' ? user.lastLogin : new Date(user.lastLogin).toISOString()) : undefined,
+      created_at: user.createdAt ? (typeof user.createdAt === 'string' ? user.createdAt : new Date(user.createdAt).toISOString()) : new Date().toISOString(),
+      role_names: user.role_names || [],
+      role_slugs: user.role_slugs || []
+    }));
+  }, [usersData]);
+
+  // Handle user selection from the table
+  const handleUserSelection = (userIds: string[]) => {
+    console.log("Selected users:", userIds);
+  };
+
+  // Handle bulk actions from the table
+  const handleBulkAction = (action: string, userIds: string[]) => {
+    const selectedUsers = transformedUsers.filter(user => userIds.includes(user.id));
+    
+    switch (action) {
+      case "email":
+        toast({
+          title: "Email Action",
+          description: `Email functionality for ${userIds.length} user(s) would be implemented here.`,
+        });
+        break;
+      case "delete":
+        if (canPerformAdminActions) {
+          // You could implement bulk delete here
+          toast({
+            title: "Bulk Delete",
+            description: `Bulk delete for ${userIds.length} user(s) would be implemented here.`,
+          });
+        } else {
+          toast({
+            title: "Access Denied",
+            description: "You don't have permission to delete users.",
+            variant: "destructive",
+          });
+        }
+        break;
+      default:
+        console.log("Unknown action:", action);
+    }
+  };
+
+  // Note: Advanced table handles its own filtering and sorting, so we don't need the old filteredUsers logic
 
   const toggleSort = (field: string) => {
     if (sortBy === field) {
@@ -721,23 +757,14 @@ export default function UsersPage() {
           </div>
 
           {/* Enhanced Table with Search, Filter, and Column Controls */}
-          <WmTable
-            data={filteredUsers}
-            onRowClick={handleRowClick}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            onManageRoles={handleRoleChange}
-            onChangePassword={handlePasswordChange}
-            canPerformAdminActions={canPerformAdminActions}
-            getWarehouseName={getWarehouseName}
-            className="shadow-sm"
-          />
-
-          <div className="flex items-center justify-end space-x-2 py-4">
-            <div className="text-sm text-muted-foreground">
-              {filteredUsers.length} user(s) found
-            </div>
-          </div>
+          <ThemeProvider>
+            <AdvancedUserTable
+              data={transformedUsers}
+              loading={isLoading}
+              onUserSelect={handleUserSelection}
+              onBulkAction={handleBulkAction}
+            />
+          </ThemeProvider>
         </CardContent>
       </Card>
 
