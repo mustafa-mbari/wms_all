@@ -197,8 +197,13 @@ export default function UsersPage() {
       email: "",
       firstName: "",
       lastName: "",
+      phone: "",
+      address: "",
+      city: "",
+      country: "",
       isActive: true,
       isAdmin: false,
+      defaultWarehouseId: "",
     },
   });
 
@@ -446,6 +451,8 @@ export default function UsersPage() {
       lastName: user.lastName || "",
       phone: user.phone || "",
       address: user.address || "",
+      city: user.city || "",
+      country: user.country || "",
       isActive: user.isActive,
       isAdmin: user.isAdmin || false,
       defaultWarehouseId: user.defaultWarehouseId || "",
@@ -467,8 +474,7 @@ export default function UsersPage() {
     // Find the user in our users data and use existing edit handler
     const userFound = usersData?.find((u: UserWithRoles) => u.id.toString() === user.id);
     if (userFound) {
-      setCurrentUser(userFound);
-      setIsEditDialogOpen(true);
+      handleEdit(userFound); // Call the existing handleEdit function which properly populates the form
     }
   };
 
