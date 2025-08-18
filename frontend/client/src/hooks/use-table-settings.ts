@@ -10,6 +10,7 @@ export interface ColumnVisibility {
   status: boolean
   lastLogin: boolean
   created: boolean
+  actions: boolean
 }
 
 interface TableSettings {
@@ -30,6 +31,7 @@ const DEFAULT_SETTINGS: TableSettings = {
     status: true,
     lastLogin: true,
     created: true,
+    actions: true,
   },
   pageSize: 25,
   theme: "system",

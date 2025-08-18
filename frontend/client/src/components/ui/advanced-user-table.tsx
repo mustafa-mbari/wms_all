@@ -8,6 +8,14 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
   X,
   ArrowUpDown,
   ArrowUp,
@@ -22,6 +30,12 @@ import {
   ChevronRightIcon,
   Moon,
   Sun,
+  Edit,
+  Trash2,
+  MoreHorizontal,
+  Eye,
+  UserX,
+  Shield,
 } from "lucide-react"
 import { ColumnSettingsDialog } from "./column-settings-dialog"
 import { ExportDropdown } from "./export-dropdown"
@@ -60,6 +74,7 @@ interface ColumnWidths {
   status: number
   lastLogin: number
   created: number
+  actions: number
 }
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
@@ -72,6 +87,7 @@ const DEFAULT_COLUMN_WIDTHS: ColumnWidths = {
   status: 120,
   lastLogin: 150,
   created: 130,
+  actions: 120,
 }
 
 interface AdvancedUserTableProps {
@@ -79,13 +95,23 @@ interface AdvancedUserTableProps {
   loading?: boolean
   onUserSelect?: (userIds: string[]) => void
   onBulkAction?: (action: string, userIds: string[]) => void
+  onUserEdit?: (user: UserData) => void
+  onUserDelete?: (user: UserData) => void
+  onUserView?: (user: UserData) => void
+  onUserToggleStatus?: (user: UserData) => void
+  onUserManageRoles?: (user: UserData) => void
 }
 
 export function AdvancedUserTable({ 
   data, 
   loading = false, 
   onUserSelect,
-  onBulkAction 
+  onBulkAction,
+  onUserEdit,
+  onUserDelete,
+  onUserView,
+  onUserToggleStatus,
+  onUserManageRoles
 }: AdvancedUserTableProps) {
   const { theme, setTheme } = useTheme()
   const { settings, updateSettings, resetSettings, isLoaded } = useTableSettings()
@@ -503,6 +529,59 @@ export function AdvancedUserTable({
         <span className="text-muted-foreground">{formatDate(user.created_at)}</span>
       ),
     },
+    actions: {
+      key: "actions" as const,
+      label: "Actions",
+      render: (user: UserData) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="h-8 w-8 p-0">
+              <span className="sr-only">Open menu</span>
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+            <DropdownMenuItem
+              onClick={() => onUserView?.(user)}
+              className="cursor-pointer"
+            >
+              <Eye className="mr-2 h-4 w-4" />
+              View Details
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => onUserEdit?.(user)}
+              className="cursor-pointer"
+            >
+              <Edit className="mr-2 h-4 w-4" />
+              Edit User
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => onUserManageRoles?.(user)}
+              className="cursor-pointer"
+            >
+              <Shield className="mr-2 h-4 w-4" />
+              Manage Roles
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => onUserToggleStatus?.(user)}
+              className="cursor-pointer"
+            >
+              <UserX className="mr-2 h-4 w-4" />
+              {user.is_active ? "Deactivate" : "Activate"} User
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => onUserDelete?.(user)}
+              className="cursor-pointer text-red-600 focus:text-red-600"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete User
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+    },
   }
 
   const clearAllFilters = () => {
@@ -579,6 +658,57 @@ export function AdvancedUserTable({
           <div className="text-muted-foreground">Created</div>
           <div className="mt-1">{formatDate(user.created_at)}</div>
         </div>
+      </div>
+
+      {/* Actions for mobile */}
+      <div className="flex justify-end pt-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm">
+              <MoreHorizontal className="h-4 w-4 mr-2" />
+              Actions
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+            <DropdownMenuItem
+              onClick={() => onUserView?.(user)}
+              className="cursor-pointer"
+            >
+              <Eye className="mr-2 h-4 w-4" />
+              View Details
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => onUserEdit?.(user)}
+              className="cursor-pointer"
+            >
+              <Edit className="mr-2 h-4 w-4" />
+              Edit User
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => onUserManageRoles?.(user)}
+              className="cursor-pointer"
+            >
+              <Shield className="mr-2 h-4 w-4" />
+              Manage Roles
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => onUserToggleStatus?.(user)}
+              className="cursor-pointer"
+            >
+              <UserX className="mr-2 h-4 w-4" />
+              {user.is_active ? "Deactivate" : "Activate"} User
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => onUserDelete?.(user)}
+              className="cursor-pointer text-red-600 focus:text-red-600"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete User
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {user.email_verified && (

@@ -462,6 +462,44 @@ export default function UsersPage() {
     console.log("User clicked:", user.username);
   };
 
+  // Action handlers for the advanced table
+  const handleUserEdit = (user: UserData) => {
+    // Find the user in our users data and use existing edit handler
+    const userFound = usersData?.find((u: UserWithRoles) => u.id.toString() === user.id);
+    if (userFound) {
+      setCurrentUser(userFound);
+      setIsEditDialogOpen(true);
+    }
+  };
+
+  const handleUserDelete = (user: UserData) => {
+    // Find the user in our users data and use existing delete handler
+    const userFound = usersData?.find((u: UserWithRoles) => u.id.toString() === user.id);
+    if (userFound) {
+      setCurrentUser(userFound);
+      setIsDeleteDialogOpen(true);
+    }
+  };
+
+  const handleUserView = (user: UserData) => {
+    console.log("View user details:", user.username);
+    // TODO: Implement user view dialog or navigate to user details page
+  };
+
+  const handleUserToggleStatus = (user: UserData) => {
+    console.log("Toggle status for user:", user.username);
+    // TODO: Implement status toggle
+  };
+
+  const handleUserManageRoles = (user: UserData) => {
+    // Find the user in our users data and use existing role handler
+    const userFound = usersData?.find((u: UserWithRoles) => u.id.toString() === user.id);
+    if (userFound) {
+      setCurrentUser(userFound);
+      setIsRoleDialogOpen(true);
+    }
+  };
+
   if (isLoading) {
     return (
       <DashboardLayout>
@@ -761,6 +799,11 @@ export default function UsersPage() {
             loading={isLoading}
             onUserSelect={handleUserSelection}
             onBulkAction={handleBulkAction}
+            onUserEdit={handleUserEdit}
+            onUserDelete={handleUserDelete}
+            onUserView={handleUserView}
+            onUserManageRoles={handleUserManageRoles}
+            onUserToggleStatus={handleUserToggleStatus}
           />
         </CardContent>
       </Card>

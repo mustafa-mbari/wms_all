@@ -29,6 +29,7 @@ const columnLabels: Record<keyof ColumnVisibility, string> = {
   status: "Status",
   lastLogin: "Last Login",
   created: "Created",
+  actions: "Actions",
 }
 
 export function ColumnSettingsDialog({ columnVisibility, onColumnVisibilityChange }: ColumnSettingsDialogProps) {
