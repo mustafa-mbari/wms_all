@@ -26,21 +26,6 @@ router.get('/reports/low-stock', ProductController.lowStock);
 // Get inventory value
 router.get('/reports/inventory-value', ProductController.inventoryValue);
 
-    res.json({
-      success: true,
-      message: 'Products retrieved successfully',
-      data: products
-    });
-  } catch (error) {
-    console.error('Error fetching products:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch products',
-      error: error.message
-    });
-  }
-});
-
 // Get product by ID
 router.get('/:id', async (req, res) => {
   try {
