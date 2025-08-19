@@ -831,7 +831,23 @@ export function AdvancedUserTable({
                   </th>
                   {visibleColumns.map((column) => {
                     const config = columnConfig[column]
-                    return config ? renderColumnHeader(config.key, config.label) : null
+                    if (!config) return null
+                    
+                    if (column === "actions") {
+                      return (
+                        <th
+                          key={column}
+                          className="h-12 px-4 text-left align-middle font-medium text-muted-foreground relative border-r border-border/50"
+                          style={{ width: columnWidths[column], minWidth: columnWidths[column] }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{config.label}</span>
+                          </div>
+                        </th>
+                      )
+                    }
+                    
+                    return renderColumnHeader(config.key as SortableColumn, config.label)
                   })}
                 </tr>
                 {/* Filter Row */}
@@ -843,7 +859,10 @@ export function AdvancedUserTable({
                       className="h-12 px-4 border-r border-border/50"
                       style={{ width: columnWidths[column] }}
                     >
-                      {column === "roles" || column === "status" ? (
+                      {column === "actions" ? (
+                        // No filter for actions column
+                        <div></div>
+                      ) : column === "roles" || column === "status" ? (
                         <Select value={filters[column]} onValueChange={(value) => updateFilter(column, value)}>
                           <SelectTrigger className="h-8 w-full">
                             <SelectValue placeholder={`Filter ${column}`} />
