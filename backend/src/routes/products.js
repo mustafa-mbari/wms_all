@@ -1,23 +1,30 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../config/database');
+const ProductController = require('../controllers/productController');
 
-// Get all products
-router.get('/', async (req, res) => {
-  try {
-    const products = await db('products')
-      .leftJoin('product_categories', 'products.category_id', 'product_categories.id')
-      .leftJoin('product_families', 'products.family_id', 'product_families.id')
-      .leftJoin('units_of_measure', 'products.unit_id', 'units_of_measure.id')
-      .select(
-        'products.*',
-        'product_categories.name as category_name',
-        'product_families.name as family_name',
-        'units_of_measure.name as unit_name',
-        'units_of_measure.symbol as unit_symbol'
-      )
-      .where('products.status', 'active')
-      .orderBy('products.name');
+// Get all products with pagination, search, and filters
+router.get('/', ProductController.index);
+
+// Get single product
+router.get('/:id', ProductController.show);
+
+// Create new product
+router.post('/', ProductController.store);
+
+// Update product
+router.put('/:id', ProductController.update);
+
+// Delete product
+router.delete('/:id', ProductController.destroy);
+
+// Update stock
+router.patch('/:id/stock', ProductController.updateStock);
+
+// Get low stock products
+router.get('/reports/low-stock', ProductController.lowStock);
+
+// Get inventory value
+router.get('/reports/inventory-value', ProductController.inventoryValue);
 
     res.json({
       success: true,
