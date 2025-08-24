@@ -1,6 +1,7 @@
 const fs = require('fs');
 const winston = require('winston');
 const path = require('path');
+const { combine, timestamp, printf, colorize, metadata } = require('winston');
 
 // Always put logs in "<project-root>/shared/logs"
 //const logsDir = path.join(process.cwd(), 'shared', 'logs');
@@ -18,7 +19,7 @@ const logger = winston.createLogger({
     winston.format.timestamp(),
     winston.format.printf(({ timestamp, level, message, source, method }) => {
       const sourceInfo = source ? `[${source}${method ? `::${method}` : ''}]` : '';
-      return `${timestamp} [${level.toUpperCase()}] ${sourceInfo}: ${message}`;
+      return `${timestamp || new Date().toISOString()} [${level.toUpperCase()}] ${sourceInfo}: ${message}`;
     })
   ),
   transports: [
@@ -35,10 +36,19 @@ const logger = winston.createLogger({
     }),
     new winston.transports.Console({
       format: winston.format.combine(
-        winston.format.colorize(),
+        winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
         winston.format.printf(({ timestamp, level, message, source, method }) => {
           const sourceInfo = source ? `[${source}${method ? `::${method}` : ''}]` : '';
-          return `${timestamp} [${level.toUpperCase()}] ${sourceInfo}: ${message}`;
+          // Apply colors manually to avoid conflicts
+          const colors = {
+            error: '\x1b[31m',   // red
+            warn: '\x1b[33m',    // yellow
+            info: '\x1b[36m',    // cyan
+            debug: '\x1b[37m',   // white
+            reset: '\x1b[0m'     // reset
+          };
+          const color = colors[level] || colors.info;
+          return `${timestamp} ${color}[${level.toUpperCase()}]${colors.reset} ${sourceInfo}: ${message}`;
         })
       )
     })
