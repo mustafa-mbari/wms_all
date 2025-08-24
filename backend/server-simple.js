@@ -1,4 +1,5 @@
 require('dotenv').config();
+const logger = require('./src/utils/logger/logger');
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
@@ -17,8 +18,14 @@ const pool = new Pool({
 
 // Test database connection
 pool.connect()
-  .then(() => console.log('✅ Connected to PostgreSQL database'))
-  .catch(err => console.error('❌ Database connection error:', err));
+  .then(() => {
+    console.log('✅ Connected to PostgreSQL database');
+    logger.info("✅ Connected to PostgreSQL database");
+  })
+  .catch(err => {
+    console.error('❌ Database connection error:', err);
+    logger.error("❌ Database connection error:", err);
+  });
 
 // Middleware
 app.use(cors());
@@ -248,7 +255,11 @@ app.post('/api/register', async (req, res) => {
       };
       
       console.log('New user created:', userResponse);
-      
+      logger.info('New user created', { source: 'server-simple', method: 'POST /api/users' });
+      logger.debug("DEBUG message test");
+      logger.info("INFO message test");
+      logger.error("ERROR message test");
+
       res.status(201).json({
         success: true,
         data: userResponse,
